@@ -152,7 +152,16 @@ class SmartParserImpl implements SmartParser {
     final textLower = text.toLowerCase();
 
     // Prioritized check order: Health checks first, then meetings/appointments
-    if (textLower.contains('doctor') ||
+    if (textLower.contains('idea') ||
+        textLower.contains('concept') ||
+        textLower.contains('think') ||
+        textLower.contains('brainstorm') ||
+        textLower.contains('innovate')) {
+      type = 'Idea';
+      category = 'Personal';
+      tags.add('Idea');
+      priority = 'Low';
+    } else if (textLower.contains('doctor') ||
         textLower.contains('dentist') ||
         textLower.contains('dr.') ||
         textLower.contains('dr ') ||
@@ -175,6 +184,17 @@ class SmartParserImpl implements SmartParser {
       category = 'Work';
       tags.add('Meeting');
       priority = 'High';
+    } else if (textLower.contains('work') ||
+        textLower.contains('office') ||
+        textLower.contains('boss') ||
+        textLower.contains('client') ||
+        textLower.contains('project') ||
+        textLower.contains('deadline') ||
+        textLower.contains('presentation')) {
+      type = 'Work';
+      category = 'Work';
+      tags.add('Work');
+      priority = 'Medium';
     } else if (textLower.contains('buy') ||
         textLower.contains('shopping') ||
         textLower.contains('milk') ||
@@ -211,6 +231,17 @@ class SmartParserImpl implements SmartParser {
       category = 'Personal';
       tags.add('Reminder');
       priority = 'Medium';
+    } else if (textLower.contains('personal') ||
+        textLower.contains('home') ||
+        textLower.contains('family') ||
+        textLower.contains('wife') ||
+        textLower.contains('husband') ||
+        textLower.contains('son') ||
+        textLower.contains('daughter')) {
+      type = 'Personal';
+      category = 'Personal';
+      tags.add('Personal');
+      priority = 'Low';
     }
 
     // Adjust Priority based on urgency keywords

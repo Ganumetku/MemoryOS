@@ -12,6 +12,7 @@ import '../../../../shared/widgets/memory_loading_indicator.dart';
 import '../../domain/entities/memory.dart';
 import '../bloc/memory_cubit.dart';
 import '../bloc/memory_state.dart';
+import '../../../../core/utils/memory_type_helper.dart';
 
 /// Screen representing the detailed visualization of a stored Memory fragment.
 /// Integrates App Bar actions (Edit content, Toggle Pin, Delete) and showcases metadata logs.
@@ -328,33 +329,45 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Memory Type Header tag
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.brandPrimary.withAlpha(20),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(
-                                    Icons.edit_note,
-                                    size: 14,
-                                    color: AppColors.brandPrimary,
+                            Builder(
+                              builder: (context) {
+                                final config = MemoryTypeHelper.getConfig(
+                                  m.type,
+                                );
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    'Memory Type: Text',
-                                    style: AppTextStyles.labelSmall.copyWith(
-                                      color: AppColors.brandPrimary,
-                                      fontWeight: FontWeight.bold,
+                                  decoration: BoxDecoration(
+                                    color: config.color.withAlpha(20),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: config.color.withAlpha(40),
+                                      width: 1.0,
                                     ),
                                   ),
-                                ],
-                              ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        config.icon,
+                                        size: 14,
+                                        color: config.color,
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        m.type,
+                                        style: AppTextStyles.labelSmall
+                                            .copyWith(
+                                              color: config.color,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
                             ),
                             AppSpacing.v20,
 

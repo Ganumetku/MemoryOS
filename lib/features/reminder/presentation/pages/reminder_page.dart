@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/utils/memory_type_helper.dart';
+
 import '../../../../app/di/service_locator.dart';
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_radius.dart';
@@ -376,6 +378,33 @@ class ReminderPage extends StatelessWidget {
     );
   }
 
+  Widget _buildTypeBadge(String? type) {
+    final config = MemoryTypeHelper.getConfig(type);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: config.color.withAlpha(20),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: config.color.withAlpha(40), width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(config.icon, size: 10, color: config.color),
+          const SizedBox(width: 4),
+          Text(
+            type ?? 'Personal',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: config.color,
+              fontWeight: FontWeight.bold,
+              fontSize: 8,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildReminderCard(
     BuildContext context,
     Memory m,
@@ -384,6 +413,7 @@ class ReminderPage extends StatelessWidget {
   ) {
     final isCompleted = m.tags.contains('completed_reminder');
     final isMissed = !isCompleted && m.reminderAt!.isBefore(DateTime.now());
+    final typeConfig = MemoryTypeHelper.getConfig(m.type);
 
     // Status config
     IconData statusIcon;
@@ -413,82 +443,112 @@ class ReminderPage extends StatelessWidget {
       child: GestureDetector(
         onLongPress: () => _showReminderOptions(context, m, cubit),
         child: MemoryGlassCard(
-          padding: AppSpacing.pAll16,
+          padding: EdgeInsets.zero,
           onTap: () => context
               .push('/memories/${m.id}')
               .then((_) => cubit.fetchMemories()),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: statusColor.withAlpha(20),
-                child: Icon(statusIcon, color: statusColor, size: 18),
-              ),
-              AppSpacing.h16,
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Left color accent bar indicator matching type
+                Container(
+                  width: 4,
+                  decoration: BoxDecoration(
+                    color: typeConfig.color,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(16),
+                      bottomLeft: Radius.circular(16),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: AppSpacing.pAll16,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            m.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: AppColors.textDarkPrimary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor: statusColor.withAlpha(20),
+                          child: Icon(statusIcon, color: statusColor, size: 18),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: statusColor.withAlpha(15),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: statusColor.withAlpha(50),
-                              width: 0.5,
-                            ),
-                          ),
-                          child: Text(
-                            statusText,
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: statusColor,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        AppSpacing.h16,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      m.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTextStyles.titleMedium.copyWith(
+                                        color: AppColors.textDarkPrimary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: statusColor.withAlpha(15),
+                                      borderRadius: BorderRadius.circular(4),
+                                      border: Border.all(
+                                        color: statusColor.withAlpha(50),
+                                        width: 0.5,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      statusText,
+                                      style: AppTextStyles.labelSmall.copyWith(
+                                        color: statusColor,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              AppSpacing.v4,
+                              Row(
+                                children: [
+                                  Text(
+                                    reminderStr,
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: AppColors.brandPrimary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  AppSpacing.h12,
+                                  _buildTypeBadge(m.type),
+                                ],
+                              ),
+                              AppSpacing.v8,
+                              Text(
+                                m.content,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.textDarkSecondary,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
-                    AppSpacing.v4,
-                    Text(
-                      reminderStr,
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: AppColors.brandPrimary,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    AppSpacing.v8,
-                    Text(
-                      m.content,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textDarkSecondary,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

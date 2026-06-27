@@ -15,6 +15,7 @@ import '../../../memories/domain/entities/memory.dart';
 import '../../../memories/presentation/bloc/memory_cubit.dart';
 import '../../../memories/presentation/bloc/memory_state.dart';
 import '../../../memories/presentation/widgets/memory_options_bottom_sheet.dart';
+import '../../../../core/utils/memory_type_helper.dart';
 
 /// Redesigned Dashboard Page showing local memories from Isar database.
 /// Incorporates premium Apple/Arc-like spacing, summary logs, pinned scrolling,
@@ -672,94 +673,147 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     );
   }
 
-  Widget _buildMemoryCard(BuildContext context, Memory m, MemoryCubit cubit) {
-    return MemoryGlassCard(
-      padding: AppSpacing.pAll16,
-      onTap: () =>
-          context.push('/memories/${m.id}').then((_) => cubit.fetchMemories()),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildTypeBadge(String? type) {
+    final config = MemoryTypeHelper.getConfig(type);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: config.color.withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: config.color.withAlpha(40), width: 1.0),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  m.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.textDarkPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-              AppSpacing.h8,
-              Text(
-                _formatTime(m.createdAt),
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.textDarkTertiary,
-                ),
-              ),
-            ],
-          ),
-          AppSpacing.v8,
+          Icon(config.icon, size: 12, color: config.color),
+          const SizedBox(width: 4),
           Text(
-            m.content,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textDarkSecondary,
+            type ?? 'Personal',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: config.color,
+              fontWeight: FontWeight.bold,
+              fontSize: 10,
             ),
           ),
-          AppSpacing.v12,
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.edit_note,
-                    size: 14,
-                    color: AppColors.textDarkTertiary,
-                  ),
-                  if (m.tags.isNotEmpty) ...[
-                    AppSpacing.h8,
-                    ...m.tags
-                        .take(2)
-                        .map(
-                          (tag) => Padding(
-                            padding: const EdgeInsets.only(right: 6.0),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: AppColors.brandPrimary.withAlpha(20),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                tag,
-                                style: AppTextStyles.labelSmall.copyWith(
-                                  color: AppColors.brandPrimary,
-                                  fontSize: 9,
-                                ),
-                              ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMemoryCard(BuildContext context, Memory m, MemoryCubit cubit) {
+    final typeConfig = MemoryTypeHelper.getConfig(m.type);
+    return MemoryGlassCard(
+      padding: EdgeInsets.zero,
+      onTap: () =>
+          context.push('/memories/${m.id}').then((_) => cubit.fetchMemories()),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              width: 4,
+              decoration: BoxDecoration(
+                color: typeConfig.color,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                ),
+              ),
+            ),
+            Expanded(
+              child: Padding(
+                padding: AppSpacing.pAll16,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            m.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.titleMedium.copyWith(
+                              color: AppColors.textDarkPrimary,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
+                        AppSpacing.h8,
+                        Text(
+                          _formatTime(m.createdAt),
+                          style: AppTextStyles.labelSmall.copyWith(
+                            color: AppColors.textDarkTertiary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    AppSpacing.v8,
+                    Text(
+                      m.content,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textDarkSecondary,
+                      ),
+                    ),
+                    AppSpacing.v12,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            _buildTypeBadge(m.type),
+                            if (m.tags.isNotEmpty) ...[
+                              AppSpacing.h8,
+                              ...m.tags
+                                  .where((tag) => tag != m.type)
+                                  .take(2)
+                                  .map(
+                                    (tag) => Padding(
+                                      padding: const EdgeInsets.only(
+                                        right: 6.0,
+                                      ),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.brandPrimary
+                                              .withAlpha(20),
+                                          borderRadius: BorderRadius.circular(
+                                            4,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          tag,
+                                          style: AppTextStyles.labelSmall
+                                              .copyWith(
+                                                color: AppColors.brandPrimary,
+                                                fontSize: 9,
+                                              ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                            ],
+                          ],
+                        ),
+                        if (m.isPinned)
+                          const Icon(
+                            Icons.push_pin,
+                            size: 12,
+                            color: AppColors.brandPrimary,
+                          ),
+                      ],
+                    ),
                   ],
-                ],
-              ),
-              if (m.isPinned)
-                const Icon(
-                  Icons.push_pin,
-                  size: 12,
-                  color: AppColors.brandPrimary,
                 ),
-            ],
-          ),
-        ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

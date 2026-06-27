@@ -35,16 +35,17 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
   late TextEditingController _personController;
 
   final List<String> _types = [
-    'Reminder',
+    'Idea',
+    'Health',
+    'Work',
+    'Personal',
+    'Finance',
+    'Shopping',
+    'Travel',
     'Birthday',
     'Meeting',
+    'Reminder',
     'Task',
-    'Shopping',
-    'Health',
-    'Travel',
-    'Finance',
-    'Personal',
-    'Work',
   ];
 
   final List<String> _priorities = ['Low', 'Medium', 'High'];
