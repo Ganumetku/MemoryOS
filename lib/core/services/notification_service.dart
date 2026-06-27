@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -9,8 +10,10 @@ import 'package:timezone/timezone.dart' as tz;
 /// Background isolate entrypoint callback for fallbacks.
 @pragma('vm:entry-point')
 void fallbackAlarmCallback() async {
-  // ignore: avoid_print
-  print('DEBUG [MemoryOS]: Fallback Alarm Manager Callback Triggered!');
+  if (kDebugMode) {
+    // ignore: avoid_print
+    print('DEBUG [MemoryOS]: Fallback Alarm Manager Callback Triggered!');
+  }
 
   // Ensure background binding initialized
   WidgetsFlutterBinding.ensureInitialized();
@@ -155,20 +158,16 @@ class NotificationServiceImpl implements NotificationService {
       // 4. Request permissions on app startup & print status
       final granted = await requestPermissions();
       final exactAllowed = await canScheduleExactAlarms();
-      // ignore: avoid_print
-      print('DEBUG [MemoryOS]: Initialized NotificationService.');
-      // ignore: avoid_print
-      print(
+      _log('DEBUG [MemoryOS]: Initialized NotificationService.');
+      _log(
         'DEBUG [MemoryOS]: App Start Notification permission granted = $granted',
       );
-      // ignore: avoid_print
-      print(
+      _log(
         'DEBUG [MemoryOS]: App Start Exact alarm permission allowed = $exactAllowed',
       );
     } catch (e) {
       _lastErrorMessage = 'Init error: $e';
-      // ignore: avoid_print
-      print('DEBUG [MemoryOS]: NotificationService init error: $e');
+      _log('DEBUG [MemoryOS]: NotificationService init error: $e');
     }
   }
 
@@ -194,14 +193,12 @@ class NotificationServiceImpl implements NotificationService {
           if (exactAllowed == false) {
             final exactGranted = await androidImplementation
                 .requestExactAlarmsPermission();
-            // ignore: avoid_print
-            print(
+            _log(
               'DEBUG [MemoryOS]: Android exact alarm requested: $exactGranted',
             );
           }
         } catch (e) {
-          // ignore: avoid_print
-          print('DEBUG [MemoryOS]: Android exact alarm request error: $e');
+          _log('DEBUG [MemoryOS]: Android exact alarm request error: $e');
         }
       }
 
@@ -264,23 +261,17 @@ class NotificationServiceImpl implements NotificationService {
       final exactAllowed = await canScheduleExactAlarms();
       final now = DateTime.now();
 
-      // ignore: avoid_print
-      print('DEBUG [MemoryOS]: current time = $now');
-      // ignore: avoid_print
-      print('DEBUG [MemoryOS]: scheduled time = $scheduledDate');
-      // ignore: avoid_print
-      print('DEBUG [MemoryOS]: notification id = $id');
-      // ignore: avoid_print
-      print(
+      _log('DEBUG [MemoryOS]: current time = $now');
+      _log('DEBUG [MemoryOS]: scheduled time = $scheduledDate');
+      _log('DEBUG [MemoryOS]: notification id = $id');
+      _log(
         'DEBUG [MemoryOS]: notification permission granted = $hasPermission',
       );
-      // ignore: avoid_print
-      print('DEBUG [MemoryOS]: exact alarm permission status = $exactAllowed');
+      _log('DEBUG [MemoryOS]: exact alarm permission status = $exactAllowed');
 
       // Double check that we aren't scheduling in the past
       if (scheduledDate.isBefore(now)) {
-        // ignore: avoid_print
-        print(
+        _log(
           'DEBUG [MemoryOS]: scheduledDate is in the past, skipping schedule.',
         );
         _lastErrorMessage = 'Skipped: scheduled time is in the past';
@@ -333,26 +324,22 @@ class NotificationServiceImpl implements NotificationService {
           exact: true,
         );
         _isFallbackScheduled = alarmSuccess;
-        // ignore: avoid_print
-        print(
+        _log(
           'DEBUG [MemoryOS]: Fallback alarm manager scheduled = $alarmSuccess',
         );
       } catch (alarmError) {
         _isFallbackScheduled = false;
-        // ignore: avoid_print
-        print('DEBUG [MemoryOS]: Fallback alarm manager error = $alarmError');
+        _log('DEBUG [MemoryOS]: Fallback alarm manager error = $alarmError');
       }
 
       // After scheduling, print pending notifications count
       final pending = await getPendingNotifications();
-      // ignore: avoid_print
-      print('DEBUG [MemoryOS]: pending notification count = ${pending.length}');
+      _log('DEBUG [MemoryOS]: pending notification count = ${pending.length}');
     } catch (e) {
       _lastErrorMessage = 'Schedule error: $e';
       _isPrimaryScheduled = false;
       _isFallbackScheduled = false;
-      // ignore: avoid_print
-      print('DEBUG [MemoryOS]: Notification schedule error: $e');
+      _log('DEBUG [MemoryOS]: Notification schedule error: $e');
     }
   }
 
@@ -385,8 +372,7 @@ class NotificationServiceImpl implements NotificationService {
       );
     } catch (e) {
       _lastErrorMessage = 'Instant notification error: $e';
-      // ignore: avoid_print
-      print('DEBUG [MemoryOS]: Instant notification error: $e');
+      _log('DEBUG [MemoryOS]: Instant notification error: $e');
     }
   }
 
@@ -452,6 +438,13 @@ class NotificationServiceImpl implements NotificationService {
       await _settingsChannel.invokeMethod('openBatteryOptimizationSettings');
     } catch (e) {
       _lastErrorMessage = 'Open battery error: $e';
+    }
+  }
+
+  void _log(String message) {
+    if (kDebugMode) {
+      // ignore: avoid_print
+      print(message);
     }
   }
 }

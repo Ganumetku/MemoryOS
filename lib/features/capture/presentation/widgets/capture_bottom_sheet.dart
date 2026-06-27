@@ -164,8 +164,7 @@ class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
                     memoryCubit = context.read<MemoryCubit>();
                   } catch (_) {}
 
-                  Navigator.pop(context);
-                  showModalBottomSheet(
+                  showModalBottomSheet<bool>(
                     context: context,
                     isScrollControlled: true,
                     backgroundColor: Colors.transparent,
@@ -179,7 +178,11 @@ class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
                         child: SmartAnalysisBottomSheet(rawContent: text),
                       );
                     },
-                  );
+                  ).then((result) {
+                    if (context.mounted) {
+                      Navigator.pop(context, result);
+                    }
+                  });
                 }
               },
             ),

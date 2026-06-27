@@ -3,6 +3,9 @@ import 'package:internet_connection_checker/internet_connection_checker.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/services/storage_service.dart';
 
 import '../../core/logger/logger_service.dart';
 import '../../core/network/network_info.dart';
@@ -31,6 +34,13 @@ Future<void> initServiceLocator() async {
   final dir = await getApplicationDocumentsDirectory();
   final isar = await Isar.open([MemoryModelSchema], directory: dir.path);
   sl.registerSingleton<Isar>(isar);
+
+  // Initialize and Register SharedPreferences
+  final sharedPrefs = await SharedPreferences.getInstance();
+  sl.registerSingleton<SharedPreferences>(sharedPrefs);
+
+  // Register Storage Service
+  sl.registerLazySingleton<StorageService>(() => StorageServiceImpl(sl()));
 
   // Supabase Client (Initialized after Supabase.initialize is called in main.dart)
   sl.registerLazySingleton<SupabaseClient>(() => Supabase.instance.client);

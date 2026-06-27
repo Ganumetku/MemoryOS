@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_text_styles.dart';
+import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/storage_service.dart';
 
 /// Screen 001 - Splash Screen.
 /// Displays a minimal glowing logo and text with a smooth fade animation,
@@ -34,10 +36,15 @@ class _SplashPageState extends State<SplashPage> {
       }
     });
 
-    // Navigate to Welcome screen after 2.5 seconds
+    // Navigate to Welcome screen or Timeline based on onboarding completion status
     _navTimer = Timer(const Duration(milliseconds: 2500), () {
       if (mounted) {
-        context.go('/welcome');
+        final completed = sl<StorageService>().getHasCompletedOnboarding();
+        if (completed) {
+          context.go('/');
+        } else {
+          context.go('/welcome');
+        }
       }
     });
   }

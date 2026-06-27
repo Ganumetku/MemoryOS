@@ -164,8 +164,11 @@ class _CapturePageState extends State<CapturePage> {
                               },
                             );
 
-                            if (saved == true && mounted) {
-                              router.pop();
+                            if (saved == true) {
+                              memoryCubit?.fetchMemories();
+                              if (mounted) {
+                                router.pop();
+                              }
                             }
                           }
                         },

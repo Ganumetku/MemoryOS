@@ -7,6 +7,8 @@ import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../shared/widgets/memory_loading_indicator.dart';
 import '../../../../shared/widgets/memory_primary_button.dart';
+import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/storage_service.dart';
 import '../bloc/capture_cubit.dart';
 import '../bloc/capture_state.dart';
 import '../widgets/capture_bottom_sheet.dart';
@@ -45,6 +47,13 @@ class _WelcomePageView extends StatelessWidget {
     );
   }
 
+  void _completeOnboarding(BuildContext context) async {
+    await sl<StorageService>().setHasCompletedOnboarding(true);
+    if (context.mounted) {
+      context.go('/');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cubit = context.read<CaptureCubit>();
@@ -73,7 +82,7 @@ class _WelcomePageView extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        'MEMORY VAULT PROTO',
+                        'SECURE MEMORY VAULT',
                         style: AppTextStyles.labelSmall.copyWith(
                           color: AppColors.brandPrimary,
                           fontWeight: FontWeight.bold,
@@ -104,16 +113,32 @@ class _WelcomePageView extends StatelessWidget {
                     ),
                     AppSpacing.v40,
 
-                    // Primary Action trigger
                     BlocBuilder<CaptureCubit, CaptureState>(
                       builder: (context, state) {
                         final isInteractive = state is! CaptureLoading;
-                        return MemoryPrimaryButton(
-                          text: 'Capture Memory',
-                          icon: Icons.add_circle_outline,
-                          onPressed: isInteractive
-                              ? () => _showCaptureSheet(context, cubit)
-                              : null,
+                        return Column(
+                          children: [
+                            MemoryPrimaryButton(
+                              text: 'Capture Memory',
+                              icon: Icons.add_circle_outline,
+                              onPressed: isInteractive
+                                  ? () => _showCaptureSheet(context, cubit)
+                                  : null,
+                            ),
+                            AppSpacing.v16,
+                            TextButton(
+                              onPressed: isInteractive
+                                  ? () => _completeOnboarding(context)
+                                  : null,
+                              child: Text(
+                                'Skip onboarding',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.textDarkSecondary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
@@ -157,7 +182,7 @@ class _WelcomePageView extends StatelessWidget {
                       text: state.capturedText,
                       onClose: () {
                         cubit.reset();
-                        context.go('/');
+                        _completeOnboarding(context);
                       },
                     ),
                   ),
