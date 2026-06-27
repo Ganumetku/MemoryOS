@@ -14,6 +14,7 @@ import '../../features/ai_chat/presentation/pages/ai_chat_page.dart';
 import '../../features/search/presentation/pages/search_page.dart';
 import '../../features/search/presentation/pages/recall_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
+import '../../features/settings/presentation/pages/developer_dashboard_page.dart';
 
 /// Central routing management using [GoRouter].
 /// Outlines the entire navigation hierarchy for the MemoryOS application.
@@ -80,6 +81,10 @@ class AppRouter {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/developer-dashboard',
+        builder: (context, state) => const DeveloperDashboardPage(),
       ),
     ],
     errorBuilder: (context, state) =>

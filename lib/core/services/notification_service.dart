@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import '../../app/di/service_locator.dart';
+import 'analytics_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
@@ -313,6 +315,10 @@ class NotificationServiceImpl implements NotificationService {
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
 
+      try {
+        sl<AnalyticsService>().incrementNotificationsFired();
+      } catch (_) {}
+
       // 2. Fallback Alarm Manager scheduler
       try {
         final alarmSuccess = await AndroidAlarmManager.oneShotAt(
@@ -370,6 +376,10 @@ class NotificationServiceImpl implements NotificationService {
         body: body,
         notificationDetails: details,
       );
+
+      try {
+        sl<AnalyticsService>().incrementNotificationsFired();
+      } catch (_) {}
     } catch (e) {
       _lastErrorMessage = 'Instant notification error: $e';
       _log('DEBUG [MemoryOS]: Instant notification error: $e');

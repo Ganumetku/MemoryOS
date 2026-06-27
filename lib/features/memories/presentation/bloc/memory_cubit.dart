@@ -97,18 +97,19 @@ class MemoryCubit extends Cubit<MemoryState> {
     );
   }
 
-  /// Updates title and body content details of a memory.
   Future<void> updateMemoryContent(
     Memory memory,
     String newTitle,
-    String newContent,
-  ) async {
+    String newContent, {
+    String? newType,
+  }) async {
     if (newContent.trim().isEmpty) return;
     emit(const MemoryLoading());
 
     final updated = memory.copyWith(
       title: newTitle,
       content: newContent,
+      type: newType ?? memory.type,
       updatedAt: DateTime.now(),
     );
 

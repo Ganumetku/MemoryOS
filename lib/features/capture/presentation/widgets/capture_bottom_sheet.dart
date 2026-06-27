@@ -10,11 +10,20 @@ import '../../../../shared/widgets/memory_text_field.dart';
 import '../bloc/capture_cubit.dart';
 import 'smart_analysis_bottom_sheet.dart';
 import '../../../memories/presentation/bloc/memory_cubit.dart';
+import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/analytics_service.dart';
 
 /// The bottom sheet containing capture triggers (Speak, Write, Camera, Scan).
 /// Expands dynamically into a text entry zone upon clicking "Write".
 class CaptureBottomSheet extends StatefulWidget {
-  const CaptureBottomSheet({super.key});
+  final String? prefilledText;
+  final int? parentMemoryId;
+
+  const CaptureBottomSheet({
+    super.key,
+    this.prefilledText,
+    this.parentMemoryId,
+  });
 
   @override
   State<CaptureBottomSheet> createState() => _CaptureBottomSheetState();
@@ -23,6 +32,15 @@ class CaptureBottomSheet extends StatefulWidget {
 class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
   bool _isWriting = false;
   final TextEditingController _controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.prefilledText != null) {
+      _isWriting = true;
+      _controller.text = widget.prefilledText!;
+    }
+  }
 
   @override
   void dispose() {
@@ -95,7 +113,12 @@ class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
                   icon: Icons.mic_none_outlined,
                   label: 'Speak',
                   isActive: false,
-                  onTap: () => _showComingSoonToast(context, 'Speak capture'),
+                  onTap: () {
+                    try {
+                      sl<AnalyticsService>().incrementCaptureCount('voice');
+                    } catch (_) {}
+                    _showComingSoonToast(context, 'Speak capture');
+                  },
                 ),
                 _OptionTile(
                   icon: Icons.edit_note_outlined,
@@ -111,7 +134,12 @@ class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
                   icon: Icons.camera_alt_outlined,
                   label: 'Camera',
                   isActive: false,
-                  onTap: () => _showComingSoonToast(context, 'Camera capture'),
+                  onTap: () {
+                    try {
+                      sl<AnalyticsService>().incrementCaptureCount('camera');
+                    } catch (_) {}
+                    _showComingSoonToast(context, 'Camera capture');
+                  },
                 ),
                 _OptionTile(
                   icon: Icons.document_scanner_outlined,
@@ -175,7 +203,10 @@ class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
                           if (memoryCubit != null)
                             BlocProvider.value(value: memoryCubit),
                         ],
-                        child: SmartAnalysisBottomSheet(rawContent: text),
+                        child: SmartAnalysisBottomSheet(
+                          rawContent: text,
+                          parentMemoryId: widget.parentMemoryId,
+                        ),
                       );
                     },
                   ).then((result) {

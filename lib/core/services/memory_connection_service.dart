@@ -2,6 +2,7 @@ import 'package:isar/isar.dart';
 
 import '../../features/memories/data/models/memory_model.dart';
 import '../../features/memories/domain/entities/memory.dart';
+import '../parser/smart_parser.dart';
 
 class RelatedMemory {
   final Memory memory;
@@ -29,6 +30,11 @@ class MemoryConnectionService {
     'so', 'if', 'then', 'than', 'about', 'out', 'up', 'down', 'over', 'under',
   };
 
+  static const Set<String> _categories = {
+    'idea', 'health', 'work', 'personal', 'finance', 'shopping',
+    'travel', 'birthday', 'meeting', 'reminder', 'task'
+  };
+
   MemoryConnectionService(this._isar);
 
   Future<List<RelatedMemory>> getRelatedMemories(Memory targetMemory) async {
@@ -41,6 +47,10 @@ class MemoryConnectionService {
     final targetContentWords = _extractKeywords(targetMemory.content);
     final targetTags = targetMemory.tags.map((t) => t.toLowerCase()).toSet();
 
+    // Parse person name of target memory if available
+    final targetParsed = SmartParserImpl().parse(targetMemory.content);
+    final targetPerson = targetParsed.personName;
+
     // Deduplicate models using a set of IDs
     final seenIds = <int>{};
 
@@ -50,13 +60,17 @@ class MemoryConnectionService {
       seenIds.add(model.id);
       
       double score = 0.0;
-      List<String> reasons = [];
+      List<String> rawReasons = [];
       
       // 1. Same Category (+20)
       if (model.type == targetMemory.type) {
         score += 20.0;
-        reasons.add("Same type: ${model.type}");
+        rawReasons.add("Same type: ${model.type}");
       }
+
+      // Parse person name of candidate memory
+      final modelParsed = SmartParserImpl().parse(model.content);
+      final modelPerson = modelParsed.personName;
 
       // 2. Same Tags (+15 per tag)
       final modelTags = model.tags.map((t) => t.toLowerCase()).toSet();
@@ -64,15 +78,17 @@ class MemoryConnectionService {
       if (commonTags.isNotEmpty) {
         score += (commonTags.length * 15.0);
         for (final tag in commonTags) {
-          // Check if this tag looks like a person name
           final originalTag = model.tags.firstWhere(
             (t) => t.toLowerCase() == tag,
             orElse: () => tag,
           );
-          if (originalTag.toLowerCase().startsWith('dr') || RegExp(r'^[A-Z]').hasMatch(originalTag)) {
-            reasons.add("Same person: $originalTag");
+          
+          if (_categories.contains(originalTag.toLowerCase())) {
+            rawReasons.add("Same type: $originalTag");
+          } else if (_isPersonName(originalTag, targetPerson, modelPerson)) {
+            rawReasons.add("Same person: $originalTag");
           } else {
-            reasons.add("Same tag: $originalTag");
+            rawReasons.add("Same tag: $originalTag");
           }
         }
       }
@@ -82,7 +98,7 @@ class MemoryConnectionService {
       if (daysDiff <= 3) {
         score += 15.0;
         final text = daysDiff == 0 ? "Same day" : "$daysDiff day${daysDiff == 1 ? '' : 's'} apart";
-        reasons.add("Created nearby: $text");
+        rawReasons.add("Created nearby: $text");
       }
 
       // 4. Same Reminder Day (+10)
@@ -91,7 +107,7 @@ class MemoryConnectionService {
             targetMemory.reminderAt!.month == model.reminderAt!.month &&
             targetMemory.reminderAt!.day == model.reminderAt!.day) {
           score += 10.0;
-          reasons.add("Same reminder day");
+          rawReasons.add("Same reminder day");
         }
       }
 
@@ -112,7 +128,7 @@ class MemoryConnectionService {
       // Add common keyword reason if any keyword overlaps in title or content
       final allCommonWords = commonTitleWords.union(commonContentWords);
       if (allCommonWords.isNotEmpty) {
-        reasons.add("Common keyword: ${allCommonWords.first}");
+        rawReasons.add("Common keyword: ${allCommonWords.first}");
       }
 
       // Convert score to percentage
@@ -121,6 +137,9 @@ class MemoryConnectionService {
 
       // Only include memories that have some similarity (e.g., >= 15%)
       if (finalPercentage >= 15) {
+        // Deduplicate connection reasons cleanly
+        final reasons = rawReasons.toSet().toList();
+        
         relatedMemories.add(
           RelatedMemory(
             memory: _mapModelToEntity(model),
@@ -136,6 +155,16 @@ class MemoryConnectionService {
 
     // Return top 5
     return relatedMemories.take(5).toList();
+  }
+
+  bool _isPersonName(String tag, String? targetPerson, String? modelPerson) {
+    final lowerTag = tag.toLowerCase().trim();
+    if (_categories.contains(lowerTag)) return false;
+    if (targetPerson != null && lowerTag == targetPerson.toLowerCase().trim()) return true;
+    if (modelPerson != null && lowerTag == modelPerson.toLowerCase().trim()) return true;
+    if (lowerTag.startsWith('dr')) return true;
+    if (RegExp(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$').hasMatch(tag)) return true;
+    return false;
   }
 
   Set<String> _extractKeywords(String text) {

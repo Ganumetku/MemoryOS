@@ -1,6 +1,8 @@
 import 'package:isar/isar.dart';
 
 import '../models/memory_model.dart';
+import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/follow_up_service.dart';
 
 /// Contract for local storage operations on [MemoryModel].
 abstract class MemoryLocalDataSource {
@@ -31,6 +33,9 @@ class MemoryLocalDataSourceImpl implements MemoryLocalDataSource {
     await isar.writeTxn(() async {
       await isar.memoryModels.put(model);
     });
+    try {
+      await sl<FollowUpService>().handleMemorySaved(model);
+    } catch (_) {}
   }
 
   @override
@@ -38,6 +43,9 @@ class MemoryLocalDataSourceImpl implements MemoryLocalDataSource {
     await isar.writeTxn(() async {
       await isar.memoryModels.put(model);
     });
+    try {
+      await sl<FollowUpService>().handleMemorySaved(model);
+    } catch (_) {}
   }
 
   @override
@@ -45,5 +53,8 @@ class MemoryLocalDataSourceImpl implements MemoryLocalDataSource {
     await isar.writeTxn(() async {
       await isar.memoryModels.delete(id);
     });
+    try {
+      await sl<FollowUpService>().handleMemoryDeleted(id);
+    } catch (_) {}
   }
 }

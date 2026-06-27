@@ -16,6 +16,7 @@ import '../../../memories/presentation/bloc/memory_cubit.dart';
 import '../../../memories/presentation/bloc/memory_state.dart';
 import '../../../memories/presentation/widgets/memory_options_bottom_sheet.dart';
 import '../../../../core/utils/memory_type_helper.dart';
+import '../../../../core/services/life_area_service.dart';
 
 /// Recall page providing local search/retrieval of stored memories.
 class RecallPage extends StatefulWidget {
@@ -29,18 +30,14 @@ class _RecallPageState extends State<RecallPage> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
-  final List<String> _suggestionChips = [
-    'Today',
-    'Pinned',
-    'Ideas',
-    'Personal',
-    'Work',
-    'Goals',
-  ];
+  String? _selectedLifeArea;
+
+  late final List<String> _lifeAreaChips;
 
   @override
   void initState() {
     super.initState();
+    _lifeAreaChips = ['All', ...sl<LifeAreaService>().areas];
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -69,10 +66,10 @@ class _RecallPageState extends State<RecallPage> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(config.icon, size: 12, color: config.color),
+          Text(config.emoji, style: const TextStyle(fontSize: 12)),
           const SizedBox(width: 4),
           Text(
-            type ?? 'Personal',
+            config.icon == Icons.help_outline ? (type ?? 'Personal') : type ?? 'Personal',
             style: AppTextStyles.labelSmall.copyWith(
               color: config.color,
               fontWeight: FontWeight.bold,
@@ -165,29 +162,26 @@ class _RecallPageState extends State<RecallPage> {
                     ),
                     AppSpacing.v12,
 
-                    // 3. Suggestion Chips Row
                     SizedBox(
                       height: 36,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
-                        itemCount: _suggestionChips.length,
+                        itemCount: _lifeAreaChips.length,
                         separatorBuilder: (_, __) => AppSpacing.h8,
                         itemBuilder: (context, index) {
-                          final chip = _suggestionChips[index];
-                          final isSelected =
-                              _query.toLowerCase() == chip.toLowerCase();
+                          final chip = _lifeAreaChips[index];
+                          final isSelected = (chip == 'All' && _selectedLifeArea == null) ||
+                              (_selectedLifeArea?.toLowerCase() == chip.toLowerCase());
                           return GestureDetector(
                             onTap: () {
-                              if (isSelected) {
-                                _searchController.clear();
-                              } else {
-                                _searchController.text = chip;
-                                _searchController.selection =
-                                    TextSelection.fromPosition(
-                                      TextPosition(offset: chip.length),
-                                    );
-                              }
+                              setState(() {
+                                if (chip == 'All') {
+                                  _selectedLifeArea = null;
+                                } else {
+                                  _selectedLifeArea = chip;
+                                }
+                              });
                             },
                             child: Container(
                               padding: const EdgeInsets.symmetric(
@@ -267,6 +261,13 @@ class _RecallPageState extends State<RecallPage> {
 
                             // 2. Perform client-side keyword matching
                             final filtered = memories.where((m) {
+                              // Filter by selected Life Area first
+                              if (_selectedLifeArea != null) {
+                                if (m.type.toLowerCase().trim() != _selectedLifeArea!.toLowerCase().trim()) {
+                                  return false;
+                                }
+                              }
+
                               final searchKey = _query.trim().toLowerCase();
                               if (searchKey.isEmpty) return true;
 

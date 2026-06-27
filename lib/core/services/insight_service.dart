@@ -3,6 +3,8 @@ import 'package:isar/isar.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../features/memories/data/models/memory_model.dart';
+import '../../app/di/service_locator.dart';
+import 'life_area_service.dart';
 
 class AppInsight {
   final IconData icon;
@@ -229,6 +231,50 @@ class InsightService {
         description: "The keyword '$topKeyword' appears in ${sortedKeywords.first.value} of your captured memories.",
       ));
     }
+
+    // Life Area Insights
+    try {
+      final lifeAreaService = sl<LifeAreaService>();
+      final areaInsights = await lifeAreaService.getLifeAreaInsights();
+      if (areaInsights.isNotEmpty) {
+        final mostActive = areaInsights['most_active'];
+        final leastActive = areaInsights['least_active'];
+        final neglected = areaInsights['neglected'];
+        final growing = areaInsights['growing'];
+
+        if (mostActive != null && mostActive != 'Other') {
+          pool.add(AppInsight(
+            icon: Icons.star_outline,
+            headline: "Most Active: $mostActive",
+            description: "Your $mostActive area has the highest concentration of memories.",
+          ));
+        }
+
+        if (leastActive != null && leastActive != 'None' && leastActive != 'Other') {
+          pool.add(AppInsight(
+            icon: Icons.trending_flat,
+            headline: "Least Active: $leastActive",
+            description: "Your $leastActive area has the lowest number of captured memories.",
+          ));
+        }
+
+        if (neglected != null && neglected != 'None') {
+          pool.add(AppInsight(
+            icon: Icons.warning_amber_outlined,
+            headline: "Neglected Area: $neglected",
+            description: "You haven't captured any memories in '$neglected' for the last 7 days.",
+          ));
+        }
+
+        if (growing != null && growing != 'None') {
+          pool.add(AppInsight(
+            icon: Icons.trending_up,
+            headline: "Growing Area: $growing",
+            description: "Your '$growing' area is growing fast, with the most captures this week.",
+          ));
+        }
+      }
+    } catch (_) {}
 
     if (pool.isEmpty) {
       return InsightsResult(insights: [], hasEnoughData: false);

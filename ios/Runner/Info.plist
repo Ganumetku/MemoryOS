@@ -13,7 +13,9 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>memory_os</string>
+	<string>MemoryOS</string>
+	<key>CFBundleDisplayName</key>
+	<string>MemoryOS</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

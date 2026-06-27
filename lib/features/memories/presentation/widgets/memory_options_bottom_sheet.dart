@@ -191,7 +191,7 @@ class _MemoryOptionsBottomSheetState extends State<MemoryOptionsBottomSheet> {
           side: BorderSide(color: AppColors.bgDarkTertiary, width: 1.0),
         ),
         title: Text(
-          'Erase Memory?',
+          'Forget this memory?',
           style: AppTextStyles.titleLarge.copyWith(
             color: AppColors.textDarkPrimary,
             fontWeight: FontWeight.bold,

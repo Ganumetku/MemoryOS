@@ -14,6 +14,8 @@ import '../bloc/memory_cubit.dart';
 import '../bloc/memory_state.dart';
 import '../../../../core/utils/memory_type_helper.dart';
 import '../../../../core/services/memory_connection_service.dart';
+import '../../../../core/services/analytics_service.dart';
+import '../../../../core/services/life_area_service.dart';
 
 /// Screen representing the detailed visualization of a stored Memory fragment.
 /// Integrates App Bar actions (Edit content, Toggle Pin, Delete) and showcases metadata logs.
@@ -27,91 +29,142 @@ class MemoryDetailPage extends StatefulWidget {
 }
 
 class _MemoryDetailPageState extends State<MemoryDetailPage> {
+  @override
+  void initState() {
+    super.initState();
+    try {
+      final id = int.tryParse(widget.memoryId);
+      if (id != null) {
+        sl<AnalyticsService>().incrementMemoryOpenedCount(id);
+      }
+    } catch (_) {}
+  }
+
   void _editMemory(BuildContext context, Memory memory, MemoryCubit cubit) {
     final titleController = TextEditingController(text: memory.title);
     final contentController = TextEditingController(text: memory.content);
+    final List<String> lifeAreas = sl<LifeAreaService>().areas;
+    String selectedLifeArea = lifeAreas.firstWhere(
+      (a) => a.toLowerCase() == memory.type.toLowerCase().trim(),
+      orElse: () => 'Other',
+    );
 
     showDialog(
       context: context,
-      builder: (dialogCtx) => AlertDialog(
-        backgroundColor: AppColors.bgDarkSecondary,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.brAll16,
-          side: BorderSide(color: AppColors.bgDarkTertiary, width: 1.0),
-        ),
-        title: Text(
-          'Edit Memory',
-          style: AppTextStyles.titleMedium.copyWith(
-            color: AppColors.textDarkPrimary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                style: AppTextStyles.bodyMedium.copyWith(
+      builder: (dialogCtx) {
+        String currentArea = selectedLifeArea;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.bgDarkSecondary,
+              shape: RoundedRectangleBorder(
+                borderRadius: AppRadius.brAll16,
+                side: BorderSide(color: AppColors.bgDarkTertiary, width: 1.0),
+              ),
+              title: Text(
+                'Edit Memory',
+                style: AppTextStyles.titleMedium.copyWith(
                   color: AppColors.textDarkPrimary,
                   fontWeight: FontWeight.bold,
                 ),
-                decoration: InputDecoration(
-                  labelText: 'Title',
-                  labelStyle: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.textDarkTertiary,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textDarkPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Title',
+                        labelStyle: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.textDarkTertiary,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                    AppSpacing.v16,
+                    TextField(
+                      controller: contentController,
+                      maxLines: 5,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textDarkPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Content',
+                        labelStyle: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.textDarkTertiary,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                    AppSpacing.v16,
+                    DropdownButtonFormField<String>(
+                      initialValue: currentArea,
+                      dropdownColor: AppColors.bgDarkSecondary,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textDarkPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: 'Life Area',
+                        labelStyle: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.textDarkTertiary,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      items: lifeAreas
+                          .map((a) => DropdownMenuItem(value: a, child: Text(a)))
+                          .toList(),
+                      onChanged: (val) {
+                        if (val != null) {
+                          setDialogState(() {
+                            currentArea = val;
+                          });
+                        }
+                      },
+                    ),
+                  ],
                 ),
               ),
-              AppSpacing.v16,
-              TextField(
-                controller: contentController,
-                maxLines: 5,
-                style: AppTextStyles.bodyMedium.copyWith(
-                  color: AppColors.textDarkPrimary,
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
                 ),
-                decoration: InputDecoration(
-                  labelText: 'Content',
-                  labelStyle: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.textDarkTertiary,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
+                TextButton(
+                  onPressed: () {
+                    if (contentController.text.trim().isNotEmpty) {
+                      cubit.updateMemoryContent(
+                        memory,
+                        titleController.text.trim(),
+                        contentController.text.trim(),
+                        newType: currentArea,
+                      );
+                      Navigator.pop(dialogCtx);
+                    }
+                  },
+                  child: const Text(
+                    'Save',
+                    style: TextStyle(
+                      color: AppColors.brandPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogCtx),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () {
-              if (contentController.text.trim().isNotEmpty) {
-                cubit.updateMemoryContent(
-                  memory,
-                  titleController.text.trim(),
-                  contentController.text.trim(),
-                );
-                Navigator.pop(dialogCtx);
-              }
-            },
-            child: const Text(
-              'Save',
-              style: TextStyle(
-                color: AppColors.brandPrimary,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -125,7 +178,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
           side: BorderSide(color: AppColors.bgDarkTertiary, width: 1.0),
         ),
         title: Text(
-          'Erase Memory?',
+          'Forget this memory?',
           style: AppTextStyles.titleLarge.copyWith(
             color: AppColors.textDarkPrimary,
             fontWeight: FontWeight.bold,
@@ -358,7 +411,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                                       ),
                                       const SizedBox(width: 6),
                                       Text(
-                                        m.type,
+                                        '${config.emoji} ${m.type}',
                                         style: AppTextStyles.labelSmall
                                             .copyWith(
                                               color: config.color,

@@ -1,4 +1,6 @@
 import 'parsed_memory.dart';
+import '../../app/di/service_locator.dart';
+import '../services/life_area_service.dart';
 
 /// Contract interface for the natural language parser.
 abstract class SmartParser {
@@ -144,105 +146,12 @@ class SmartParserImpl implements SmartParser {
     }
 
     // 5. Determine Memory Type, Category & Priority
-    String type = 'Personal';
-    String category = 'Personal';
+    String type = sl<LifeAreaService>().detectLifeArea(text);
+    String category = type;
     String priority = 'Low';
-    final List<String> tags = [];
+    final List<String> tags = [type];
 
     final textLower = text.toLowerCase();
-
-    // Prioritized check order: Health checks first, then meetings/appointments
-    if (textLower.contains('idea') ||
-        textLower.contains('concept') ||
-        textLower.contains('think') ||
-        textLower.contains('brainstorm') ||
-        textLower.contains('innovate')) {
-      type = 'Idea';
-      category = 'Personal';
-      tags.add('Idea');
-      priority = 'Low';
-    } else if (textLower.contains('doctor') ||
-        textLower.contains('dentist') ||
-        textLower.contains('dr.') ||
-        textLower.contains('dr ') ||
-        textLower.contains('gym') ||
-        textLower.contains('workout') ||
-        textLower.contains('health')) {
-      type = 'Health';
-      category = 'Health';
-      tags.add('Health');
-      priority = 'High';
-    } else if (textLower.contains('birthday') || textLower.contains('bday')) {
-      type = 'Birthday';
-      category = 'Personal';
-      tags.add('Birthday');
-      priority = 'Medium';
-    } else if (textLower.contains('meeting') ||
-        textLower.contains('appointment') ||
-        textLower.contains('meet')) {
-      type = 'Meeting';
-      category = 'Work';
-      tags.add('Meeting');
-      priority = 'High';
-    } else if (textLower.contains('work') ||
-        textLower.contains('office') ||
-        textLower.contains('boss') ||
-        textLower.contains('client') ||
-        textLower.contains('project') ||
-        textLower.contains('deadline') ||
-        textLower.contains('presentation')) {
-      type = 'Work';
-      category = 'Work';
-      tags.add('Work');
-      priority = 'Medium';
-    } else if (textLower.contains('buy') ||
-        textLower.contains('shopping') ||
-        textLower.contains('milk') ||
-        textLower.contains('grocery')) {
-      type = 'Shopping';
-      category = 'Personal';
-      tags.add('Shopping');
-      priority = 'Low';
-    } else if (textLower.contains('pay') ||
-        textLower.contains('bill') ||
-        textLower.contains('rent') ||
-        textLower.contains('finance')) {
-      type = 'Finance';
-      category = 'Finance';
-      tags.add('Finance');
-      priority = 'High';
-    } else if (textLower.contains('flight') ||
-        textLower.contains('trip') ||
-        textLower.contains('hotel') ||
-        textLower.contains('travel')) {
-      type = 'Travel';
-      category = 'Travel';
-      tags.add('Travel');
-      priority = 'High';
-    } else if (textLower.contains('call') ||
-        textLower.contains('todo') ||
-        textLower.contains('task')) {
-      type = 'Task';
-      category = 'Work';
-      tags.add('Task');
-      priority = 'Medium';
-    } else if (textLower.contains('reminder') || reminderAt != null) {
-      type = 'Reminder';
-      category = 'Personal';
-      tags.add('Reminder');
-      priority = 'Medium';
-    } else if (textLower.contains('personal') ||
-        textLower.contains('home') ||
-        textLower.contains('family') ||
-        textLower.contains('wife') ||
-        textLower.contains('husband') ||
-        textLower.contains('son') ||
-        textLower.contains('daughter')) {
-      type = 'Personal';
-      category = 'Personal';
-      tags.add('Personal');
-      priority = 'Low';
-    }
 
     // Adjust Priority based on urgency keywords
     if (textLower.contains('urgent') ||

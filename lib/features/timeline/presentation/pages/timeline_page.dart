@@ -15,9 +15,15 @@ import '../../../memories/domain/entities/memory.dart';
 import '../../../memories/presentation/bloc/memory_cubit.dart';
 import '../../../memories/presentation/bloc/memory_state.dart';
 import '../../../memories/presentation/widgets/memory_options_bottom_sheet.dart';
+import '../widgets/life_balance_card.dart';
 import '../../../../core/services/summary_service.dart';
 import '../../../../core/services/insight_service.dart';
+import '../../../../core/services/follow_up_service.dart';
+import '../../../../core/services/home_experience_service.dart';
 import '../../../../core/utils/memory_type_helper.dart';
+import '../../../memories/data/models/follow_up_model.dart';
+import '../../../memories/data/models/memory_model.dart';
+import 'package:isar/isar.dart';
 
 /// Redesigned Dashboard Page showing local memories from Isar database.
 /// Incorporates premium Apple/Arc-like spacing, summary logs, pinned scrolling,
@@ -101,17 +107,6 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     });
   }
 
-  String _getGreeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) {
-      return 'Good Morning';
-    }
-    if (hour < 17) {
-      return 'Good Afternoon';
-    }
-    return 'Good Evening';
-  }
-
   @override
   Widget build(BuildContext context) {
     final memoryCubit = context.read<MemoryCubit>();
@@ -158,31 +153,56 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                       )
                       .toList();
 
-                  return CustomScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    slivers: [
-                      // 1. Premium Top AppBar
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16.0,
-                          vertical: 12.0,
-                        ),
-                        sliver: SliverToBoxAdapter(
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                  return FutureBuilder<HomeExperienceData>(
+                    future: sl<HomeExperienceService>().getExperienceData(),
+                    builder: (context, expSnapshot) {
+                      final exp = expSnapshot.data;
+                      final greetingText = exp?.greeting ?? 'Good Morning';
+                      final subtitleText = exp?.subtitle ?? 'Ready to focus?';
+                      final accentColor = exp?.accentColor ?? AppColors.brandPrimary;
+                      final icon = exp?.icon ?? Icons.wb_sunny_outlined;
+
+                      return CustomScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        slivers: [
+                          // 1. Premium Top AppBar
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16.0,
+                              vertical: 12.0,
+                            ),
+                            sliver: SliverToBoxAdapter(
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    '${_getGreeting()}, Ganesh 👋',
-                                    style: AppTextStyles.titleMedium.copyWith(
-                                      color: AppColors.textDarkPrimary,
-                                      fontWeight: FontWeight.bold,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        icon,
+                                        color: accentColor,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '$greetingText, Ganesh 👋',
+                                            style: AppTextStyles.titleMedium.copyWith(
+                                              color: AppColors.textDarkPrimary,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          Text(
+                                            subtitleText,
+                                            style: AppTextStyles.labelSmall.copyWith(
+                                              color: AppColors.textDarkTertiary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
                               Row(
                                 children: [
                                   IconButton(
@@ -260,8 +280,27 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                           sliver: SliverToBoxAdapter(
                             child: _EntranceAnimation(
                               index: 1,
-                              child: _buildSummaryCard(memories),
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 300),
+                                child: exp == null
+                                    ? _buildSummaryCard(memories)
+                                    : _buildExperienceCard(exp, memories),
+                              ),
                             ),
+                          ),
+                        ),
+
+                        // 3.2. Active Follow-up Card
+                        _buildFollowUpSliver(context, memoryCubit),
+
+                        // 3.3. Life Balance Card
+                        const SliverPadding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 8.0,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: LifeBalanceCard(),
                           ),
                         ),
 
@@ -273,7 +312,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                           ),
                           sliver: SliverToBoxAdapter(
                             child: _EntranceAnimation(
-                              index: 2,
+                              index: 3,
                               child: _buildInsightsCard(),
                             ),
                           ),
@@ -285,7 +324,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                             padding: const EdgeInsets.symmetric(vertical: 12.0),
                             sliver: SliverToBoxAdapter(
                               child: _EntranceAnimation(
-                                index: 3,
+                                index: 4,
                                 child: _buildPinnedSection(
                                   context,
                                   pinned,
@@ -359,11 +398,13 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                       ],
                     ],
                   );
-                }
+                },
+              );
+            }
 
-                return const SizedBox.shrink();
-              },
-            ),
+              return const SizedBox.shrink();
+            },
+          ),
 
             // 6. Custom Labeled Bottom Navigation Bar
             Positioned(
@@ -774,10 +815,13 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(config.icon, size: 12, color: config.color),
+          Text(
+            config.emoji,
+            style: const TextStyle(fontSize: 12),
+          ),
           const SizedBox(width: 4),
           Text(
-            type ?? 'Personal',
+            config.icon == Icons.help_outline ? (type ?? 'Personal') : type ?? 'Personal', // Just in case
             style: AppTextStyles.labelSmall.copyWith(
               color: config.color,
               fontWeight: FontWeight.bold,
@@ -850,20 +894,19 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            _buildTypeBadge(m.type),
-                            if (m.tags.isNotEmpty) ...[
-                              AppSpacing.h8,
-                              ...m.tags
-                                  .where((tag) => tag != m.type)
-                                  .take(2)
-                                  .map(
-                                    (tag) => Padding(
-                                      padding: const EdgeInsets.only(
-                                        right: 6.0,
-                                      ),
-                                      child: Container(
+                        Expanded(
+                          child: Wrap(
+                            spacing: 8.0,
+                            runSpacing: 4.0,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              _buildTypeBadge(m.type),
+                              if (m.tags.isNotEmpty) ...[
+                                ...m.tags
+                                    .where((tag) => tag != m.type)
+                                    .take(2)
+                                    .map(
+                                      (tag) => Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 6,
                                           vertical: 2,
@@ -885,16 +928,18 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                                         ),
                                       ),
                                     ),
-                                  ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
-                        if (m.isPinned)
+                        if (m.isPinned) ...[
+                          AppSpacing.h8,
                           const Icon(
                             Icons.push_pin,
                             size: 12,
                             color: AppColors.brandPrimary,
                           ),
+                        ],
                       ],
                     ),
                   ],
@@ -917,7 +962,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
           side: BorderSide(color: AppColors.bgDarkTertiary, width: 1.0),
         ),
         title: Text(
-          'Erase Memory?',
+          'Forget this memory?',
           style: AppTextStyles.titleLarge.copyWith(
             color: AppColors.textDarkPrimary,
             fontWeight: FontWeight.bold,
@@ -1157,6 +1202,404 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildFollowUpSliver(BuildContext context, MemoryCubit cubit) {
+    return FutureBuilder<FollowUpModel?>(
+      future: sl<FollowUpService>().getActiveFollowUp(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+        }
+
+        final followUp = snapshot.data!;
+
+        return SliverPadding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16.0,
+            vertical: 8.0,
+          ),
+          sliver: SliverToBoxAdapter(
+            child: _EntranceAnimation(
+              index: 2,
+              child: _buildFollowUpCard(context, followUp, cubit),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFollowUpCard(BuildContext context, FollowUpModel followUp, MemoryCubit cubit) {
+    return MemoryGlassCard(
+      padding: AppSpacing.pAll20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.chat_bubble_outline_outlined,
+                size: 16,
+                color: AppColors.brandPrimary,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Smart Follow-up',
+                style: AppTextStyles.labelSmall.copyWith(
+                  color: AppColors.textDarkTertiary,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ],
+          ),
+          AppSpacing.v12,
+          Text(
+            followUp.question,
+            style: AppTextStyles.titleMedium.copyWith(
+              color: AppColors.textDarkPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          AppSpacing.v16,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // Remind Later Button
+              _buildFollowUpActionButton(
+                icon: Icons.access_time_outlined,
+                label: 'Later',
+                color: AppColors.textDarkSecondary,
+                onTap: () async {
+                  await sl<FollowUpService>().remindLater(followUp.id);
+                  cubit.fetchMemories();
+                },
+              ),
+              AppSpacing.h12,
+              // No Button
+              _buildFollowUpActionButton(
+                icon: Icons.close,
+                label: 'No',
+                color: AppColors.error,
+                onTap: () async {
+                  await sl<FollowUpService>().markNo(followUp.id);
+                  cubit.fetchMemories();
+                },
+              ),
+              AppSpacing.h12,
+              // Yes Button
+              _buildFollowUpActionButton(
+                icon: Icons.check,
+                label: 'Yes',
+                color: AppColors.brandPrimary,
+                onTap: () async {
+                  if (!context.mounted) return;
+                  
+                  final captureCubit = context.read<CaptureCubit>();
+                  
+                  showDialog<bool>(
+                    context: context,
+                    builder: (dialContext) {
+                      return AlertDialog(
+                        backgroundColor: AppColors.bgDarkSecondary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        title: Text(
+                          'Add Details',
+                          style: AppTextStyles.titleLarge.copyWith(
+                            color: AppColors.textDarkPrimary,
+                          ),
+                        ),
+                        content: Text(
+                          'Would you like to add what happened?',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textDarkSecondary,
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            child: Text(
+                              'No, Skip',
+                              style: TextStyle(color: AppColors.textDarkTertiary),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(dialContext, false);
+                            },
+                          ),
+                          TextButton(
+                            child: Text(
+                              'Yes, Capture',
+                              style: TextStyle(color: AppColors.brandPrimary),
+                            ),
+                            onPressed: () {
+                              Navigator.pop(dialContext, true);
+                            },
+                          ),
+                        ],
+                      );
+                    },
+                  ).then((addDetails) async {
+                    if (addDetails == true) {
+                      final isar = sl<Isar>();
+                      final originalMemory = await isar.memoryModels.get(followUp.memoryId);
+                      
+                      String prefilledText = "";
+                      if (originalMemory != null) {
+                        prefilledText = "Follow-up to ${originalMemory.title}: ";
+                      }
+
+                      if (context.mounted) {
+                        showModalBottomSheet<bool>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) {
+                            return MultiBlocProvider(
+                              providers: [
+                                BlocProvider.value(value: captureCubit),
+                                BlocProvider.value(value: cubit),
+                              ],
+                              child: CaptureBottomSheet(
+                                prefilledText: prefilledText,
+                                parentMemoryId: followUp.memoryId,
+                              ),
+                            );
+                          },
+                        ).then((_) async {
+                          await sl<FollowUpService>().markYes(followUp.id);
+                          cubit.fetchMemories();
+                        });
+                      }
+                    } else {
+                      await sl<FollowUpService>().markYes(followUp.id);
+                      cubit.fetchMemories();
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFollowUpActionButton({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: color.withAlpha(20),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: color.withAlpha(50),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: color,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: color,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExperienceCard(HomeExperienceData exp, List<Memory> memories) {
+    switch (exp.period) {
+      case TimePeriod.morning:
+        return _buildMorningFocusCard(exp);
+      case TimePeriod.afternoon:
+        return _buildAfternoonProgressCard(exp);
+      case TimePeriod.evening:
+        return _buildEveningReflectionCard(exp);
+      case TimePeriod.night:
+        return _buildNightReflectionCard(exp);
+    }
+  }
+
+  Widget _buildMorningFocusCard(HomeExperienceData data) {
+    return MemoryGlassCard(
+      padding: AppSpacing.pAll20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "Today's Focus",
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Icon(
+                Icons.center_focus_strong_outlined,
+                color: data.accentColor,
+                size: 20,
+              ),
+            ],
+          ),
+          AppSpacing.v16,
+          _buildDetailRow(Icons.alarm, '${data.todayRemindersCount} reminders scheduled today'),
+          AppSpacing.v8,
+          _buildDetailRow(Icons.rate_review_outlined, '${data.upcomingFollowUpsCount} pending follow-ups today'),
+          AppSpacing.v16,
+          const Divider(color: AppColors.bgDarkTertiary),
+          AppSpacing.v8,
+          Text(
+            data.motivationalLine,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textDarkSecondary,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAfternoonProgressCard(HomeExperienceData data) {
+    return MemoryGlassCard(
+      padding: AppSpacing.pAll20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Afternoon Progress',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Icon(
+                Icons.show_chart,
+                color: data.accentColor,
+                size: 20,
+              ),
+            ],
+          ),
+          AppSpacing.v16,
+          _buildDetailRow(Icons.edit_note, '${data.todayCapturesCount} memories captured today'),
+          AppSpacing.v8,
+          _buildDetailRow(Icons.check_circle_outline, '${data.completedRemindersCount} reminders completed today'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEveningReflectionCard(HomeExperienceData data) {
+    return MemoryGlassCard(
+      padding: AppSpacing.pAll20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Evening Reflection',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Icon(
+                Icons.favorite_border,
+                color: data.accentColor,
+                size: 20,
+              ),
+            ],
+          ),
+          AppSpacing.v16,
+          _buildDetailRow(Icons.history, '${data.todayMemories.length} memories captured today'),
+          AppSpacing.v8,
+          _buildDetailRow(Icons.hub_outlined, '${data.connectionsCreatedCount} connections formed today'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNightReflectionCard(HomeExperienceData data) {
+    return MemoryGlassCard(
+      padding: AppSpacing.pAll20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Day Completed',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Icon(
+                Icons.bedtime_outlined,
+                color: data.accentColor,
+                size: 20,
+              ),
+            ],
+          ),
+          AppSpacing.v16,
+          _buildDetailRow(Icons.task_alt, '${data.completedTodayCount} tasks/reminders completed today'),
+          AppSpacing.v8,
+          _buildDetailRow(Icons.next_plan_outlined, '${data.tomorrowRemindersCount} upcoming reminders tomorrow'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: AppColors.textDarkTertiary,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textDarkSecondary,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

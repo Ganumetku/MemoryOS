@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:isar/isar.dart';
 
 import '../../../../app/di/service_locator.dart';
 import '../../../../app/theme/app_colors.dart';
@@ -14,14 +15,22 @@ import '../../../../shared/widgets/memory_primary_button.dart';
 import '../../../../shared/widgets/memory_text_field.dart';
 import '../bloc/capture_cubit.dart';
 import '../../../memories/presentation/bloc/memory_cubit.dart';
+import '../../../../core/services/analytics_service.dart';
 import '../../../../core/utils/memory_type_helper.dart';
+import '../../../../core/services/life_area_service.dart';
+import '../../../memories/data/models/memory_model.dart';
 
 /// Bottom sheet showcasing natural language analysis tags.
 /// Prompts the user to review, edit, and confirm auto-extracted details.
 class SmartAnalysisBottomSheet extends StatefulWidget {
   final String rawContent;
+  final int? parentMemoryId;
 
-  const SmartAnalysisBottomSheet({super.key, required this.rawContent});
+  const SmartAnalysisBottomSheet({
+    super.key,
+    required this.rawContent,
+    this.parentMemoryId,
+  });
 
   @override
   State<SmartAnalysisBottomSheet> createState() =>
@@ -35,19 +44,7 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
   late TextEditingController _categoryController;
   late TextEditingController _personController;
 
-  final List<String> _types = [
-    'Idea',
-    'Health',
-    'Work',
-    'Personal',
-    'Finance',
-    'Shopping',
-    'Travel',
-    'Birthday',
-    'Meeting',
-    'Reminder',
-    'Task',
-  ];
+  late final List<String> _types;
 
   String _selectedType = 'Personal';
   String _selectedPriority = 'Low';
@@ -56,6 +53,7 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
   @override
   void initState() {
     super.initState();
+    _types = sl<LifeAreaService>().areas;
     // Parse content offline
     _parsed = SmartParserImpl().parse(widget.rawContent);
 
@@ -64,7 +62,11 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
     _categoryController = TextEditingController(text: _parsed.category);
     _personController = TextEditingController(text: _parsed.personName ?? '');
 
-    _selectedType = _parsed.type;
+    final String typeFromParser = _parsed.type;
+    _selectedType = _types.firstWhere(
+      (t) => t.toLowerCase() == typeFromParser.toLowerCase().trim(),
+      orElse: () => 'Other',
+    );
     _selectedPriority = _parsed.priority;
     _reminderAt = _parsed.reminderAt;
   }
@@ -167,7 +169,7 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
                   _buildDetectedChip(
                     MemoryTypeHelper.getConfig(_selectedType).icon,
                     'Type',
-                    _selectedType,
+                    '${MemoryTypeHelper.getConfig(_selectedType).emoji} $_selectedType',
                     true,
                   ),
                   _buildDetectedChip(
@@ -448,6 +450,20 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
                   ),
                 );
 
+                if (widget.parentMemoryId != null) {
+                  try {
+                    final isar = sl<Isar>();
+                    final parentModel = isar.memoryModels.getSync(widget.parentMemoryId!);
+                    if (parentModel != null) {
+                      for (final tag in parentModel.tags) {
+                        if (!tagsList.map((t) => t.toLowerCase()).contains(tag.toLowerCase())) {
+                          tagsList.add(tag);
+                        }
+                      }
+                    }
+                  } catch (_) {}
+                }
+
                 // If reminder time has already passed, show error and block saving
                 if (_reminderAt != null &&
                     _reminderAt!.isBefore(DateTime.now())) {
@@ -502,13 +518,19 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
                   } catch (_) {}
                 }
 
+                if (saved) {
+                  try {
+                    sl<AnalyticsService>().incrementCaptureCount('text');
+                  } catch (_) {}
+                }
+
                 // Show success snackbar/success state
                 ScaffoldMessenger.of(context).clearSnackBars();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
                       _reminderAt != null
-                          ? "I'll remind you at ${_formatTimeOnly(_reminderAt!)}."
+                          ? "I'll remember this for you. I'll remind you at ${_formatTimeOnly(_reminderAt!)}."
                           : "I'll remember this for you.",
                       style: const TextStyle(
                         color: Colors.white,

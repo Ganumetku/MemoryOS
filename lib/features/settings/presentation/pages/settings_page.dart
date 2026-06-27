@@ -77,14 +77,7 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            const _SettingsTile(
-              icon: Icons.info_outline,
-              title: 'Version',
-              trailing: Text(
-                '1.0.0 (Build 1)',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ),
+            const _VersionTile(),
             const SizedBox(height: 32),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
@@ -95,6 +88,40 @@ class SettingsPage extends StatelessWidget {
               child: const Text('Log Out'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VersionTile extends StatefulWidget {
+  const _VersionTile();
+
+  @override
+  State<_VersionTile> createState() => _VersionTileState();
+}
+
+class _VersionTileState extends State<_VersionTile> {
+  int _taps = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _taps++;
+        });
+        if (_taps >= 7) {
+          _taps = 0;
+          context.push('/developer-dashboard');
+        }
+      },
+      child: const _SettingsTile(
+        icon: Icons.info_outline,
+        title: 'Version',
+        trailing: Text(
+          '1.0.0 (Build 1)',
+          style: TextStyle(color: Colors.grey),
         ),
       ),
     );

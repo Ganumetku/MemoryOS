@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/analytics_service.dart';
 
 class SearchPage extends StatelessWidget {
   const SearchPage({super.key});
@@ -24,6 +26,13 @@ class SearchPage extends StatelessWidget {
                     onPressed: () {},
                   ),
                 ),
+                onSubmitted: (query) {
+                  if (query.trim().isNotEmpty) {
+                    try {
+                      sl<AnalyticsService>().incrementSearchCount();
+                    } catch (_) {}
+                  }
+                },
               ),
               const SizedBox(height: 24),
               Text(

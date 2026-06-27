@@ -12,8 +12,15 @@ import '../../core/network/network_info.dart';
 import '../../core/services/memory_connection_service.dart';
 import '../../core/services/summary_service.dart';
 import '../../core/services/insight_service.dart';
+import '../../core/services/follow_up_service.dart';
+import '../../core/services/analytics_service.dart';
+import '../../core/services/home_experience_service.dart';
+import '../../core/services/life_area_service.dart';
+import '../../core/services/life_area_analytics_service.dart';
+import '../../core/parser/life_area_parser.dart';
 import '../../features/memories/data/datasources/memory_local_datasource.dart';
 import '../../features/memories/data/models/memory_model.dart';
+import '../../features/memories/data/models/follow_up_model.dart';
 import '../../features/memories/data/repositories/memory_repository_impl.dart';
 import '../../features/memories/domain/repositories/memory_repository.dart';
 import '../../features/memories/domain/usecases/delete_memory_usecase.dart';
@@ -35,7 +42,10 @@ Future<void> initServiceLocator() async {
 
   // Initialize Isar Local Database
   final dir = await getApplicationDocumentsDirectory();
-  final isar = await Isar.open([MemoryModelSchema], directory: dir.path);
+  final isar = await Isar.open(
+    [MemoryModelSchema, FollowUpModelSchema],
+    directory: dir.path,
+  );
   sl.registerSingleton<Isar>(isar);
 
   // Initialize and Register SharedPreferences
@@ -75,6 +85,34 @@ Future<void> initServiceLocator() async {
   // Insight Service
   sl.registerLazySingleton<InsightService>(
     () => InsightService(sl(), sl()),
+  );
+
+  // FollowUp Service
+  sl.registerLazySingleton<FollowUpService>(
+    () => FollowUpService(sl(), sl()),
+  );
+
+  // Analytics Service
+  sl.registerLazySingleton<AnalyticsService>(
+    () => AnalyticsService(sl(), sl()),
+  );
+
+  // HomeExperience Service
+  sl.registerLazySingleton<HomeExperienceService>(
+    () => HomeExperienceService(sl(), sl()),
+  );
+
+  // LifeArea Services
+  sl.registerLazySingleton<LifeAreaParser>(
+    () => LifeAreaParser(),
+  );
+
+  sl.registerLazySingleton<LifeAreaAnalyticsService>(
+    () => LifeAreaAnalyticsService(sl()),
+  );
+
+  sl.registerLazySingleton<LifeAreaService>(
+    () => LifeAreaService(sl(), sl()),
   );
 
   // ==========================================
