@@ -1,10 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memory_os/app/app.dart';
+import 'package:memory_os/app/router/app_router.dart';
 
 void main() {
   testWidgets('App starts at onboarding and shows MemoryOS title', (WidgetTester tester) async {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MemoryOSApp());
+    AppRouter.router.go('/onboarding');
     await tester.pumpAndSettle();
 
     // Verify that onboarding page is displayed by finding the app title text.

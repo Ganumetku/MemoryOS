@@ -9,6 +9,7 @@ import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../shared/widgets/memory_glass_card.dart';
 import '../../../../shared/widgets/memory_loading_indicator.dart';
+import '../../../capture/presentation/bloc/capture_cubit.dart';
 import '../../../capture/presentation/widgets/capture_bottom_sheet.dart';
 import '../../../memories/domain/entities/memory.dart';
 import '../../../memories/presentation/bloc/memory_cubit.dart';
@@ -84,8 +85,11 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
-        return BlocProvider.value(
-          value: sl<MemoryCubit>(),
+        return MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: cubit),
+            BlocProvider(create: (_) => sl<CaptureCubit>()),
+          ],
           child: const CaptureBottomSheet(),
         );
       },
@@ -183,10 +187,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                                       Icons.notifications_outlined,
                                       color: AppColors.textDarkSecondary,
                                     ),
-                                    onPressed: () => _showComingSoonToast(
-                                      context,
-                                      'Notifications',
-                                    ),
+                                    onPressed: () => context.push('/reminder'),
                                   ),
                                   GestureDetector(
                                     onTap: () => _showComingSoonToast(

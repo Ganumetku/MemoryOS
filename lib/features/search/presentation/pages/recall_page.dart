@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../app/di/service_locator.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../shared/widgets/memory_empty_state.dart';
@@ -28,6 +27,15 @@ class RecallPage extends StatefulWidget {
 class _RecallPageState extends State<RecallPage> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
+
+  final List<String> _suggestionChips = [
+    'Today',
+    'Pinned',
+    'Ideas',
+    'Personal',
+    'Work',
+    'Goals',
+  ];
 
   @override
   void initState() {
@@ -82,20 +90,16 @@ class _RecallPageState extends State<RecallPage> {
     });
   }
 
+  bool _isSameDay(DateTime d1, DateTime d2) {
+    return d1.year == d2.year && d1.month == d2.month && d1.day == d2.day;
+  }
+
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => sl<MemoryCubit>()..fetchMemories(),
       child: Scaffold(
         backgroundColor: AppColors.bgDarkPrimary,
-        appBar: AppBar(
-          title: Text(
-            'Recall Memory',
-            style: AppTextStyles.titleLarge.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
         body: SafeArea(
           child: Stack(
             children: [
@@ -104,14 +108,92 @@ class _RecallPageState extends State<RecallPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AppSpacing.v16,
-                    // Search Input Box
+                    AppSpacing.v24,
+                    // 1. Redesigned Header
+                    Text(
+                      'Ask your memory',
+                      style: AppTextStyles.headlineMedium.copyWith(
+                        color: AppColors.textDarkPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    AppSpacing.v4,
+                    Text(
+                      'Search anything you have captured.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textDarkSecondary,
+                      ),
+                    ),
+                    AppSpacing.v20,
+
+                    // 2. Search Input Box
                     MemoryTextField(
                       controller: _searchController,
-                      hintText: 'What do you want to remember?',
+                      hintText: 'Try: birthday, meeting, idea, Flutter...',
                       prefixIcon: const Icon(
                         Icons.search,
                         color: AppColors.textDarkTertiary,
+                      ),
+                    ),
+                    AppSpacing.v12,
+
+                    // 3. Suggestion Chips Row
+                    SizedBox(
+                      height: 36,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: _suggestionChips.length,
+                        separatorBuilder: (_, __) => AppSpacing.h8,
+                        itemBuilder: (context, index) {
+                          final chip = _suggestionChips[index];
+                          final isSelected =
+                              _query.toLowerCase() == chip.toLowerCase();
+                          return GestureDetector(
+                            onTap: () {
+                              if (isSelected) {
+                                _searchController.clear();
+                              } else {
+                                _searchController.text = chip;
+                                _searchController.selection =
+                                    TextSelection.fromPosition(
+                                      TextPosition(offset: chip.length),
+                                    );
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? AppColors.brandPrimary.withAlpha(40)
+                                    : AppColors.bgDarkSecondary,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: isSelected
+                                      ? AppColors.brandPrimary
+                                      : AppColors.bgDarkTertiary,
+                                  width: 1.0,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  chip,
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: isSelected
+                                        ? AppColors.brandPrimary
+                                        : AppColors.textDarkSecondary,
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     AppSpacing.v24,
@@ -140,7 +222,7 @@ class _RecallPageState extends State<RecallPage> {
                           if (state is MemoryLoaded) {
                             final memories = state.memories;
 
-                            // 1. If database is completely empty
+                            // 1. Empty State
                             if (memories.isEmpty) {
                               return MemoryEmptyState(
                                 icon: Icons.search_off_outlined,
@@ -159,121 +241,195 @@ class _RecallPageState extends State<RecallPage> {
                             final filtered = memories.where((m) {
                               final searchKey = _query.trim().toLowerCase();
                               if (searchKey.isEmpty) return true;
+
+                              // Special conditions
+                              if (searchKey == 'today') {
+                                return _isSameDay(m.createdAt, DateTime.now());
+                              }
+                              if (searchKey == 'pinned') {
+                                return m.isPinned;
+                              }
+
                               return m.title.toLowerCase().contains(
                                     searchKey,
                                   ) ||
-                                  m.content.toLowerCase().contains(searchKey);
+                                  m.content.toLowerCase().contains(searchKey) ||
+                                  m.tags.any(
+                                    (t) => t.toLowerCase() == searchKey,
+                                  );
                             }).toList();
 
                             // 3. No match state
                             if (filtered.isEmpty) {
                               return MemoryEmptyState(
                                 icon: Icons.psychology_alt_outlined,
-                                title: "I couldn't find that memory.",
+                                title: "I couldn't find that memory yet.",
                                 description:
                                     'Try searching other keywords, or confirm the details of what you logged.',
                               );
                             }
 
-                            // 4. Render results
-                            return ListView.separated(
-                              itemCount: filtered.length,
-                              padding: const EdgeInsets.only(bottom: 100),
-                              separatorBuilder: (_, __) => AppSpacing.v12,
-                              itemBuilder: (context, index) {
-                                final m = filtered[index];
-                                return GestureDetector(
-                                  onLongPress: () =>
-                                      _showMemoryOptions(context, m, cubit),
-                                  child: MemoryGlassCard(
-                                    padding: AppSpacing.pAll16,
-                                    onTap: () => context
-                                        .push('/memories/${m.id}')
-                                        .then((_) => cubit.fetchMemories()),
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                m.title,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: AppTextStyles.titleMedium
-                                                    .copyWith(
-                                                      color: AppColors
-                                                          .textDarkPrimary,
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                              ),
-                                            ),
-                                            if (m.isPinned)
-                                              const Icon(
-                                                Icons.push_pin,
-                                                size: 14,
-                                                color: AppColors.brandPrimary,
-                                              ),
-                                            AppSpacing.h8,
-                                            Text(
-                                              _formatTime(m.createdAt),
-                                              style: AppTextStyles.labelSmall
-                                                  .copyWith(
-                                                    color: AppColors
-                                                        .textDarkTertiary,
-                                                  ),
-                                            ),
-                                          ],
-                                        ),
-                                        AppSpacing.v8,
-                                        Text(
-                                          m.content,
-                                          maxLines: 3,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: AppTextStyles.bodyMedium
-                                              .copyWith(
-                                                color:
-                                                    AppColors.textDarkSecondary,
-                                              ),
-                                        ),
-                                        if (m.tags.isNotEmpty) ...[
-                                          AppSpacing.v12,
-                                          Wrap(
-                                            spacing: 8,
-                                            children: m.tags.map((tag) {
-                                              return Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 8,
-                                                      vertical: 4,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.brandPrimary
-                                                      .withAlpha(15),
-                                                  borderRadius:
-                                                      AppRadius.brAll8,
-                                                ),
-                                                child: Text(
-                                                  tag,
-                                                  style: AppTextStyles
-                                                      .labelSmall
-                                                      .copyWith(
-                                                        color: AppColors
-                                                            .brandPrimary,
-                                                        fontSize: 10,
-                                                      ),
-                                                ),
-                                              );
-                                            }).toList(),
-                                          ),
-                                        ],
-                                      ],
+                            // 4. Render results with count header
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (_query.trim().isNotEmpty) ...[
+                                  Text(
+                                    filtered.length == 1
+                                        ? "I found 1 memory for '$_query'"
+                                        : "I found ${filtered.length} memories for '$_query'",
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: AppColors.brandPrimary,
+                                      fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                );
-                              },
+                                  AppSpacing.v16,
+                                ],
+                                Expanded(
+                                  child: ListView.separated(
+                                    itemCount: filtered.length,
+                                    padding: const EdgeInsets.only(bottom: 100),
+                                    separatorBuilder: (_, __) => AppSpacing.v12,
+                                    itemBuilder: (context, index) {
+                                      final m = filtered[index];
+                                      return GestureDetector(
+                                        onLongPress: () => _showMemoryOptions(
+                                          context,
+                                          m,
+                                          cubit,
+                                        ),
+                                        child: MemoryGlassCard(
+                                          padding: AppSpacing.pAll16,
+                                          onTap: () => context
+                                              .push('/memories/${m.id}')
+                                              .then(
+                                                (_) => cubit.fetchMemories(),
+                                              ),
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      m.title,
+                                                      maxLines: 1,
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: AppTextStyles
+                                                          .titleMedium
+                                                          .copyWith(
+                                                            color: AppColors
+                                                                .textDarkPrimary,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  if (m.isPinned)
+                                                    const Icon(
+                                                      Icons.push_pin,
+                                                      size: 14,
+                                                      color: AppColors
+                                                          .brandPrimary,
+                                                    ),
+                                                  AppSpacing.h8,
+                                                  Text(
+                                                    _formatDateTime(
+                                                      m.createdAt,
+                                                    ),
+                                                    style: AppTextStyles
+                                                        .labelSmall
+                                                        .copyWith(
+                                                          color: AppColors
+                                                              .textDarkTertiary,
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
+                                              AppSpacing.v8,
+                                              Text(
+                                                m.content,
+                                                maxLines: 3,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: AppTextStyles.bodyMedium
+                                                    .copyWith(
+                                                      color: AppColors
+                                                          .textDarkSecondary,
+                                                    ),
+                                              ),
+                                              AppSpacing.v12,
+                                              Row(
+                                                mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                children: [
+                                                  Row(
+                                                    children: [
+                                                      const Icon(
+                                                        Icons.edit_note,
+                                                        size: 14,
+                                                        color: AppColors
+                                                            .textDarkTertiary,
+                                                      ),
+                                                      if (m
+                                                          .tags
+                                                          .isNotEmpty) ...[
+                                                        AppSpacing.h8,
+                                                        ...m.tags.take(2).map((
+                                                          tag,
+                                                        ) {
+                                                          return Padding(
+                                                            padding:
+                                                                const EdgeInsets.only(
+                                                                  right: 6.0,
+                                                                ),
+                                                            child: Container(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        6,
+                                                                    vertical: 2,
+                                                                  ),
+                                                              decoration: BoxDecoration(
+                                                                color: AppColors
+                                                                    .brandPrimary
+                                                                    .withAlpha(
+                                                                      20,
+                                                                    ),
+                                                                borderRadius:
+                                                                    BorderRadius.circular(
+                                                                      4,
+                                                                    ),
+                                                              ),
+                                                              child: Text(
+                                                                tag,
+                                                                style: AppTextStyles
+                                                                    .labelSmall
+                                                                    .copyWith(
+                                                                      color: AppColors
+                                                                          .brandPrimary,
+                                                                      fontSize:
+                                                                          9,
+                                                                    ),
+                                                              ),
+                                                            ),
+                                                          );
+                                                        }),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
                             );
                           }
 
@@ -309,10 +465,25 @@ class _RecallPageState extends State<RecallPage> {
     );
   }
 
-  String _formatTime(DateTime date) {
+  String _formatDateTime(DateTime date) {
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    final monthStr = months[date.month - 1];
     final hourStr = date.hour.toString().padLeft(2, '0');
     final minStr = date.minute.toString().padLeft(2, '0');
-    return '$hourStr:$minStr';
+    return '${date.day} $monthStr • $hourStr:$minStr';
   }
 }
 

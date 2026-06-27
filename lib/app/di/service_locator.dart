@@ -14,6 +14,8 @@ import '../../features/memories/domain/usecases/delete_memory_usecase.dart';
 import '../../features/memories/domain/usecases/get_memories_usecase.dart';
 import '../../features/memories/domain/usecases/save_memory_usecase.dart';
 import '../../features/memories/domain/usecases/update_memory_usecase.dart';
+import '../../core/services/notification_service.dart';
+import '../../features/capture/presentation/bloc/capture_cubit.dart';
 import '../../features/memories/presentation/bloc/memory_cubit.dart';
 
 /// Global service locator instance.
@@ -40,6 +42,11 @@ Future<void> initServiceLocator() async {
   // Logger Service
   sl.registerLazySingleton<LoggerService>(() => LoggerServiceImpl());
 
+  // Notification Service
+  final notificationService = NotificationServiceImpl();
+  await notificationService.init();
+  sl.registerSingleton<NotificationService>(notificationService);
+
   // Network Info / Internet Connection
   sl.registerLazySingleton(() => InternetConnectionChecker());
   sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl(sl()));
@@ -63,6 +70,8 @@ Future<void> initServiceLocator() async {
   sl.registerLazySingleton(() => DeleteMemoryUseCase(sl()));
 
   // Cubits
+  sl.registerFactory(() => CaptureCubit(saveMemoryUseCase: sl()));
+
   sl.registerFactory(
     () => MemoryCubit(
       getMemoriesUseCase: sl(),

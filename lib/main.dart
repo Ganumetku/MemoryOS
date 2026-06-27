@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 
 import 'app/app.dart';
 import 'app/di/service_locator.dart';
@@ -9,6 +10,9 @@ import 'core/logger/logger_service.dart';
 Future<void> main() async {
   // Ensure Flutter engine binding is fully initialized
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Android Alarm Manager for background fallback scheduling
+  await AndroidAlarmManager.initialize();
 
   // Initialize Core Services & Local Settings
   await _initializePlatformServices();

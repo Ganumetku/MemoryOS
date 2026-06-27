@@ -1,6 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../memories/domain/entities/memory.dart';
 import '../../../memories/domain/usecases/save_memory_usecase.dart';
 import 'capture_state.dart';
@@ -15,19 +16,30 @@ class CaptureCubit extends Cubit<CaptureState> {
       super(const CaptureInitial());
 
   /// Saves the text memory into local Isar secure storage.
-  Future<void> saveMemory(String text) async {
+  Future<void> saveMemory(
+    String text, {
+    String? title,
+    String? type,
+    DateTime? reminderAt,
+    List<String>? tags,
+  }) async {
     if (text.trim().isEmpty) return;
 
     emit(const CaptureLoading());
 
+    // Generate a unique 32-bit safe integer ID
+    final id = DateTime.now().millisecondsSinceEpoch.remainder(100000000);
+    final finalTitle = title ?? _generateFallbackTitle(text);
+
     final newMemory = Memory(
-      id: 0, // Auto-increment indicator
-      title: _generateFallbackTitle(text),
+      id: id,
+      title: finalTitle,
       content: text,
-      type: 'text',
+      type: type ?? 'text',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
-      tags: const [],
+      tags: tags ?? const [],
+      reminderAt: reminderAt,
     );
 
     final result = await saveMemoryUseCase(newMemory);
@@ -35,7 +47,20 @@ class CaptureCubit extends Cubit<CaptureState> {
     result.fold(
       (failure) =>
           emit(const CaptureInitial()), // Reset back to default welcome
-      (_) => emit(CaptureSuccess(text)),
+      (_) async {
+        // Schedule notification if reminder set
+        if (reminderAt != null) {
+          try {
+            await sl<NotificationService>().scheduleReminder(
+              id: id,
+              title: finalTitle,
+              body: text,
+              scheduledDate: reminderAt,
+            );
+          } catch (_) {}
+        }
+        emit(CaptureSuccess(text));
+      },
     );
   }
 

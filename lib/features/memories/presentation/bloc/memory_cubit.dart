@@ -1,5 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../app/di/service_locator.dart';
+import '../../../../core/services/notification_service.dart';
 import '../../../../core/usecases/base_usecase.dart';
 import '../../domain/entities/memory.dart';
 import '../../domain/usecases/delete_memory_usecase.dart';
@@ -22,11 +24,11 @@ class MemoryCubit extends Cubit<MemoryState> {
     required this.deleteMemoryUseCase,
   }) : super(const MemoryInitial());
 
-  /// Loads all stored memories sorted by pinned and creation time.
+  /// Fetches all saved memories from local database.
   Future<void> fetchMemories() async {
     emit(const MemoryLoading());
 
-    final result = await getMemoriesUseCase(const NoParams());
+    final result = await getMemoriesUseCase(NoParams());
 
     result.fold(
       (failure) => emit(MemoryError(failure.message)),
@@ -39,26 +41,43 @@ class MemoryCubit extends Cubit<MemoryState> {
     String content, {
     String? title,
     List<String>? tags,
+    String? type,
+    DateTime? reminderAt,
   }) async {
     if (content.trim().isEmpty) return;
     emit(const MemoryLoading());
 
+    // Generate a unique 32-bit safe integer ID
+    final id = DateTime.now().millisecondsSinceEpoch.remainder(100000000);
+    final finalTitle = title ?? _generateFallbackTitle(content);
+
     final newMemory = Memory(
-      id: 0, // Auto-increment indicator
-      title: title ?? _generateFallbackTitle(content),
+      id: id,
+      title: finalTitle,
       content: content,
-      type: 'text',
+      type: type ?? 'text',
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
       tags: tags ?? const [],
+      reminderAt: reminderAt,
     );
 
     final result = await saveMemoryUseCase(newMemory);
 
-    result.fold(
-      (failure) => emit(MemoryError(failure.message)),
-      (_) => fetchMemories(),
-    );
+    result.fold((failure) => emit(MemoryError(failure.message)), (_) async {
+      // Schedule notification if reminder set
+      if (reminderAt != null) {
+        try {
+          await sl<NotificationService>().scheduleReminder(
+            id: id,
+            title: finalTitle,
+            body: content,
+            scheduledDate: reminderAt,
+          );
+        } catch (_) {}
+      }
+      fetchMemories();
+    });
   }
 
   /// Toggles the pinning state of a memory in the database.
@@ -95,10 +114,20 @@ class MemoryCubit extends Cubit<MemoryState> {
 
     final result = await updateMemoryUseCase(updated);
 
-    result.fold(
-      (failure) => emit(MemoryError(failure.message)),
-      (_) => fetchMemories(),
-    );
+    result.fold((failure) => emit(MemoryError(failure.message)), (_) async {
+      // Reschedule notification with updated content if reminder was set
+      if (memory.reminderAt != null) {
+        try {
+          await sl<NotificationService>().scheduleReminder(
+            id: memory.id,
+            title: newTitle,
+            body: newContent,
+            scheduledDate: memory.reminderAt!,
+          );
+        } catch (_) {}
+      }
+      fetchMemories();
+    });
   }
 
   /// Erases a memory by ID.
@@ -107,10 +136,90 @@ class MemoryCubit extends Cubit<MemoryState> {
 
     final result = await deleteMemoryUseCase(id);
 
-    result.fold(
-      (failure) => emit(MemoryError(failure.message)),
-      (_) => fetchMemories(),
+    result.fold((failure) => emit(MemoryError(failure.message)), (_) async {
+      // Cancel scheduled notifications if any
+      try {
+        await sl<NotificationService>().cancelNotification(id);
+      } catch (_) {}
+      fetchMemories();
+    });
+  }
+
+  /// Toggles reminder completion status locally using tag identifiers.
+  Future<void> toggleReminderCompleted(Memory memory) async {
+    emit(const MemoryLoading());
+    final tags = List<String>.from(memory.tags);
+    if (tags.contains('completed_reminder')) {
+      tags.remove('completed_reminder');
+    } else {
+      tags.add('completed_reminder');
+    }
+
+    final updated = memory.copyWith(tags: tags, updatedAt: DateTime.now());
+    final result = await updateMemoryUseCase(updated);
+
+    result.fold((failure) => emit(MemoryError(failure.message)), (_) async {
+      if (tags.contains('completed_reminder')) {
+        try {
+          await sl<NotificationService>().cancelNotification(memory.id);
+        } catch (_) {}
+      } else if (memory.reminderAt != null) {
+        try {
+          await sl<NotificationService>().scheduleReminder(
+            id: memory.id,
+            title: memory.title,
+            body: memory.content,
+            scheduledDate: memory.reminderAt!,
+          );
+        } catch (_) {}
+      }
+      fetchMemories();
+    });
+  }
+
+  /// Reschedules memory alarm notifications to a new target datetime.
+  Future<void> rescheduleReminder(Memory memory, DateTime newDateTime) async {
+    emit(const MemoryLoading());
+    final tags = List<String>.from(memory.tags)..remove('completed_reminder');
+    final updated = memory.copyWith(
+      reminderAt: newDateTime,
+      tags: tags,
+      updatedAt: DateTime.now(),
     );
+
+    final result = await updateMemoryUseCase(updated);
+
+    result.fold((failure) => emit(MemoryError(failure.message)), (_) async {
+      try {
+        await sl<NotificationService>().scheduleReminder(
+          id: memory.id,
+          title: memory.title,
+          body: memory.content,
+          scheduledDate: newDateTime,
+        );
+      } catch (_) {}
+      fetchMemories();
+    });
+  }
+
+  /// Cancels scheduled reminder notification alarms and wipes the time logs.
+  Future<void> cancelReminder(Memory memory) async {
+    emit(const MemoryLoading());
+    final tags = List<String>.from(memory.tags)..remove('completed_reminder');
+    final updated = memory.copyWith(
+      reminderAt: null,
+      tags: tags,
+      updatedAt: DateTime.now(),
+    );
+
+    final result = await updateMemoryUseCase(updated);
+
+    result.fold((failure) => emit(MemoryError(failure.message)), (_) async {
+      try {
+        await sl<NotificationService>().cancelNotification(memory.id);
+      } catch (_) {}
+      fetchMemories();
+    });
   }
 
   String _generateFallbackTitle(String content) {

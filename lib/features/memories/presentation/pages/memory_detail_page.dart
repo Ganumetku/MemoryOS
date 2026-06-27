@@ -180,6 +180,47 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
     return '${date.day} $monthStr ${date.year} • $hourStr:$minStr';
   }
 
+  String _formatReminder(DateTime reminder) {
+    final now = DateTime.now();
+    final tomorrow = now.add(const Duration(days: 1));
+    final String timeStr = _formatTimeOnly(reminder);
+
+    if (reminder.year == now.year &&
+        reminder.month == now.month &&
+        reminder.day == now.day) {
+      return 'Today, $timeStr';
+    } else if (reminder.year == tomorrow.year &&
+        reminder.month == tomorrow.month &&
+        reminder.day == tomorrow.day) {
+      return 'Tomorrow, $timeStr';
+    } else {
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec',
+      ];
+      return '${reminder.day} ${months[reminder.month - 1]}, $timeStr';
+    }
+  }
+
+  String _formatTimeOnly(DateTime date) {
+    final minStr = date.minute.toString().padLeft(2, '0');
+    final suffix = date.hour >= 12 ? 'PM' : 'AM';
+    final int displayHour = date.hour > 12
+        ? date.hour - 12
+        : (date.hour == 0 ? 12 : date.hour);
+    return '$displayHour:$minStr $suffix';
+  }
+
   @override
   Widget build(BuildContext context) {
     final parsedId = int.tryParse(widget.memoryId) ?? 0;
@@ -401,7 +442,9 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                                   _buildMetadataRow(
                                     Icons.notifications_none_outlined,
                                     'Reminder',
-                                    'Not Set',
+                                    m.reminderAt != null
+                                        ? _formatReminder(m.reminderAt!)
+                                        : 'Not Set',
                                   ),
                                   const Divider(
                                     color: AppColors.bgDarkTertiary,

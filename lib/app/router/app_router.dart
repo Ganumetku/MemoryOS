@@ -8,6 +8,7 @@ import '../../features/capture/presentation/pages/capture_page.dart';
 import '../../features/capture/presentation/pages/splash_page.dart';
 import '../../features/capture/presentation/pages/welcome_page.dart';
 import '../../features/memories/presentation/pages/memory_detail_page.dart';
+import '../../features/reminder/presentation/pages/notification_debug_page.dart';
 import '../../features/reminder/presentation/pages/reminder_page.dart';
 import '../../features/ai_chat/presentation/pages/ai_chat_page.dart';
 import '../../features/search/presentation/pages/search_page.dart';
@@ -66,6 +67,10 @@ class AppRouter {
       GoRoute(
         path: '/reminder',
         builder: (context, state) => const ReminderPage(),
+      ),
+      GoRoute(
+        path: '/notification-debug',
+        builder: (context, state) => const NotificationDebugPage(),
       ),
       GoRoute(
         path: '/ai-chat',

@@ -8,6 +8,8 @@ import '../../../../app/theme/app_text_styles.dart';
 import '../../../../shared/widgets/memory_primary_button.dart';
 import '../../../../shared/widgets/memory_text_field.dart';
 import '../bloc/capture_cubit.dart';
+import 'smart_analysis_bottom_sheet.dart';
+import '../../../memories/presentation/bloc/memory_cubit.dart';
 
 /// The bottom sheet containing capture triggers (Speak, Write, Camera, Scan).
 /// Expands dynamically into a text entry zone upon clicking "Write".
@@ -156,9 +158,28 @@ class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
               onPressed: () {
                 final text = _controller.text;
                 if (text.trim().isNotEmpty) {
-                  // Dispatch save trigger through context Cubit
-                  context.read<CaptureCubit>().saveMemory(text);
+                  final captureCubit = context.read<CaptureCubit>();
+                  MemoryCubit? memoryCubit;
+                  try {
+                    memoryCubit = context.read<MemoryCubit>();
+                  } catch (_) {}
+
                   Navigator.pop(context);
+                  showModalBottomSheet(
+                    context: context,
+                    isScrollControlled: true,
+                    backgroundColor: Colors.transparent,
+                    builder: (_) {
+                      return MultiBlocProvider(
+                        providers: [
+                          BlocProvider.value(value: captureCubit),
+                          if (memoryCubit != null)
+                            BlocProvider.value(value: memoryCubit),
+                        ],
+                        child: SmartAnalysisBottomSheet(rawContent: text),
+                      );
+                    },
+                  );
                 }
               },
             ),

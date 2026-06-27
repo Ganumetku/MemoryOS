@@ -10,6 +10,8 @@ import '../../../../shared/widgets/memory_primary_button.dart';
 import '../../../../shared/widgets/memory_text_field.dart';
 import '../bloc/capture_cubit.dart';
 import '../bloc/capture_state.dart';
+import '../widgets/smart_analysis_bottom_sheet.dart';
+import '../../../memories/presentation/bloc/memory_cubit.dart';
 
 /// Screen for creating a new memory fragment, launched from the Timeline dashboard.
 class CapturePage extends StatefulWidget {
@@ -63,7 +65,6 @@ class _CapturePageState extends State<CapturePage> {
         },
         child: BlocBuilder<CaptureCubit, CaptureState>(
           builder: (context, state) {
-            final cubit = context.read<CaptureCubit>();
             final isLoading = state is CaptureLoading;
 
             return Scaffold(
@@ -135,10 +136,37 @@ class _CapturePageState extends State<CapturePage> {
                         text: 'Save Memory',
                         icon: Icons.check,
                         isLoading: isLoading,
-                        onPressed: () {
+                        onPressed: () async {
                           final text = _controller.text;
                           if (text.trim().isNotEmpty) {
-                            cubit.saveMemory(text);
+                            final captureCubit = context.read<CaptureCubit>();
+                            MemoryCubit? memoryCubit;
+                            try {
+                              memoryCubit = context.read<MemoryCubit>();
+                            } catch (_) {}
+
+                            final router = GoRouter.of(context);
+                            final saved = await showModalBottomSheet<bool>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) {
+                                return MultiBlocProvider(
+                                  providers: [
+                                    BlocProvider.value(value: captureCubit),
+                                    if (memoryCubit != null)
+                                      BlocProvider.value(value: memoryCubit),
+                                  ],
+                                  child: SmartAnalysisBottomSheet(
+                                    rawContent: text,
+                                  ),
+                                );
+                              },
+                            );
+
+                            if (saved == true && mounted) {
+                              router.pop();
+                            }
                           }
                         },
                       ),
