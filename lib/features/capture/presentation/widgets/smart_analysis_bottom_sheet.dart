@@ -14,6 +14,7 @@ import '../../../../shared/widgets/memory_primary_button.dart';
 import '../../../../shared/widgets/memory_text_field.dart';
 import '../bloc/capture_cubit.dart';
 import '../../../memories/presentation/bloc/memory_cubit.dart';
+import '../../../../core/utils/memory_type_helper.dart';
 
 /// Bottom sheet showcasing natural language analysis tags.
 /// Prompts the user to review, edit, and confirm auto-extracted details.
@@ -47,8 +48,6 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
     'Reminder',
     'Task',
   ];
-
-  final List<String> _priorities = ['Low', 'Medium', 'High'];
 
   String _selectedType = 'Personal';
   String _selectedPriority = 'Low';
@@ -141,7 +140,7 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
             AppSpacing.v16,
 
             Text(
-              'Smart Memory Analysis',
+              'I understood this memory',
               textAlign: TextAlign.center,
               style: AppTextStyles.titleLarge.copyWith(
                 color: AppColors.textDarkPrimary,
@@ -158,23 +157,54 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
             ),
             AppSpacing.v16,
 
-            // Extraction Status Badges (Checkmarks)
+            // Extraction Status Badges (Chips)
             MemoryGlassCard(
               padding: AppSpacing.pAll12,
               child: Wrap(
-                spacing: 12,
+                spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _buildDetectionIndicator('✓ Memory Type', true),
-                  _buildDetectionIndicator('✓ Date', _parsed.date != null),
-                  _buildDetectionIndicator('✓ Time', _parsed.time != null),
-                  _buildDetectionIndicator(
-                    '✓ Person',
-                    _parsed.personName != null,
+                  _buildDetectedChip(
+                    MemoryTypeHelper.getConfig(_selectedType).icon,
+                    'Type',
+                    _selectedType,
+                    true,
                   ),
-                  _buildDetectionIndicator(
-                    '✓ Reminder',
-                    _parsed.reminderAt != null,
+                  _buildDetectedChip(
+                    Icons.calendar_today,
+                    'Date',
+                    _parsed.date != null
+                        ? _formatDateOnly(_parsed.date!)
+                        : 'None',
+                    _parsed.date != null,
+                  ),
+                  _buildDetectedChip(
+                    Icons.access_time,
+                    'Time',
+                    _parsed.time ?? 'None',
+                    _parsed.time != null,
+                  ),
+                  _buildDetectedChip(
+                    Icons.notifications_active_outlined,
+                    'Reminder',
+                    _reminderAt != null
+                        ? _formatTimeOnly(_reminderAt!)
+                        : 'None',
+                    _reminderAt != null,
+                  ),
+                  _buildDetectedChip(
+                    Icons.person_outline,
+                    'Person',
+                    _personController.text.trim().isNotEmpty
+                        ? _personController.text.trim()
+                        : 'None',
+                    _personController.text.trim().isNotEmpty,
+                  ),
+                  _buildDetectedChip(
+                    Icons.priority_high,
+                    'Priority',
+                    _selectedPriority,
+                    true,
                   ),
                 ],
               ),
@@ -242,20 +272,6 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
                   });
                 }
               },
-            ),
-            AppSpacing.v12,
-
-            // Person Name
-            Text(
-              'Person Detected',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: AppColors.textDarkSecondary,
-              ),
-            ),
-            AppSpacing.v4,
-            MemoryTextField(
-              controller: _personController,
-              hintText: 'Name (Optional)',
             ),
             AppSpacing.v12,
 
@@ -394,106 +410,43 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
                 child: Row(
                   children: [
                     const Icon(
-                      Icons.notifications_off,
+                      Icons.notifications_off_outlined,
                       size: 16,
                       color: AppColors.textDarkTertiary,
                     ),
                     AppSpacing.h8,
-                    Text(
-                      'No schedule set',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textDarkTertiary,
+                    Expanded(
+                      child: Text(
+                        "No reminder found. I’ll still remember this.",
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textDarkTertiary,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
             ],
-            AppSpacing.v12,
-
-            // Category & Priority
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Category',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.textDarkSecondary,
-                        ),
-                      ),
-                      AppSpacing.v4,
-                      MemoryTextField(
-                        controller: _categoryController,
-                        hintText: 'Category',
-                      ),
-                    ],
-                  ),
-                ),
-                AppSpacing.h12,
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Priority',
-                        style: AppTextStyles.labelSmall.copyWith(
-                          color: AppColors.textDarkSecondary,
-                        ),
-                      ),
-                      AppSpacing.v4,
-                      DropdownButtonFormField<String>(
-                        initialValue: _selectedPriority,
-                        dropdownColor: AppColors.bgDarkSecondary,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.textDarkPrimary,
-                        ),
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: AppColors.bgDarkTertiary.withAlpha(128),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        items: _priorities
-                            .map(
-                              (p) => DropdownMenuItem(value: p, child: Text(p)),
-                            )
-                            .toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() {
-                              _selectedPriority = val;
-                            });
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
             AppSpacing.v24,
 
             // Action Buttons
             MemoryPrimaryButton(
-              text: 'Confirm & Save',
+              text: "I'll Remember This",
               icon: Icons.check,
               onPressed: () {
                 final tagsList = <String>[];
-                if (_categoryController.text.trim().isNotEmpty) {
-                  tagsList.add(_categoryController.text.trim());
+                if (_parsed.category.isNotEmpty) {
+                  tagsList.add(_parsed.category);
                 }
-                if (_personController.text.trim().isNotEmpty) {
-                  tagsList.add(_personController.text.trim());
+                if (_parsed.personName != null &&
+                    _parsed.personName!.isNotEmpty) {
+                  tagsList.add(_parsed.personName!);
                 }
+                tagsList.addAll(
+                  _parsed.tags.where(
+                    (t) => t != _parsed.category && t != _parsed.personName,
+                  ),
+                );
 
                 // If reminder time has already passed, show error and block saving
                 if (_reminderAt != null &&
@@ -549,27 +502,26 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
                   } catch (_) {}
                 }
 
-                // Show success snackbar
-                if (_reminderAt != null) {
-                  final formattedTime = _formatTimeOnly(_reminderAt!);
-                  ScaffoldMessenger.of(context).clearSnackBars();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        "I'll remind you at $formattedTime.",
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      backgroundColor: AppColors.brandPrimary,
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                // Show success snackbar/success state
+                ScaffoldMessenger.of(context).clearSnackBars();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      _reminderAt != null
+                          ? "I'll remind you at ${_formatTimeOnly(_reminderAt!)}."
+                          : "I'll remember this for you.",
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  );
-                }
+                    backgroundColor: AppColors.brandPrimary,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                );
 
                 Navigator.pop(
                   context,
@@ -581,8 +533,11 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(
-                'Cancel',
-                style: AppTextStyles.titleSmall.copyWith(color: Colors.grey),
+                'Edit Text',
+                style: AppTextStyles.titleSmall.copyWith(
+                  color: AppColors.textDarkSecondary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],
@@ -591,26 +546,69 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
     );
   }
 
-  Widget _buildDetectionIndicator(String label, bool isDetected) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          isDetected ? Icons.check_circle : Icons.radio_button_unchecked,
-          size: 14,
-          color: isDetected ? AppColors.success : AppColors.textDarkTertiary,
+  String _formatDateOnly(DateTime date) {
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${date.day} ${months[date.month - 1]}';
+  }
+
+  Widget _buildDetectedChip(
+    IconData icon,
+    String label,
+    String value,
+    bool isDetected,
+  ) {
+    final color = isDetected
+        ? AppColors.brandPrimary
+        : AppColors.textDarkTertiary;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDetected ? AppColors.glassDarkSurface : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: isDetected
+              ? AppColors.glassDarkBorder
+              : AppColors.bgDarkTertiary,
+          width: 1.0,
         ),
-        AppSpacing.h4,
-        Text(
-          label.replaceAll('✓ ', ''),
-          style: AppTextStyles.labelSmall.copyWith(
-            color: isDetected
-                ? AppColors.textDarkPrimary
-                : AppColors.textDarkTertiary,
-            fontWeight: isDetected ? FontWeight.bold : FontWeight.normal,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(
+            '$label: ',
+            style: AppTextStyles.labelSmall.copyWith(
+              color: AppColors.textDarkSecondary,
+              fontSize: 10,
+            ),
           ),
-        ),
-      ],
+          Text(
+            value,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: isDetected
+                  ? AppColors.textDarkPrimary
+                  : AppColors.textDarkTertiary,
+              fontWeight: isDetected ? FontWeight.bold : FontWeight.normal,
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
