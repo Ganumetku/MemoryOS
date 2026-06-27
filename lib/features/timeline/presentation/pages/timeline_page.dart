@@ -15,6 +15,8 @@ import '../../../memories/domain/entities/memory.dart';
 import '../../../memories/presentation/bloc/memory_cubit.dart';
 import '../../../memories/presentation/bloc/memory_state.dart';
 import '../../../memories/presentation/widgets/memory_options_bottom_sheet.dart';
+import '../../../../core/services/summary_service.dart';
+import '../../../../core/services/insight_service.dart';
 import '../../../../core/utils/memory_type_helper.dart';
 
 /// Redesigned Dashboard Page showing local memories from Isar database.
@@ -263,13 +265,27 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                           ),
                         ),
 
+                        // 3.5. Memory Insights Card
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 8.0,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: _EntranceAnimation(
+                              index: 2,
+                              child: _buildInsightsCard(),
+                            ),
+                          ),
+                        ),
+
                         // 4. Pinned memories section (Horizontal scrolling)
                         if (pinned.isNotEmpty)
                           SliverPadding(
                             padding: const EdgeInsets.symmetric(vertical: 12.0),
                             sliver: SliverToBoxAdapter(
                               child: _EntranceAnimation(
-                                index: 2,
+                                index: 3,
                                 child: _buildPinnedSection(
                                   context,
                                   pinned,
@@ -453,65 +469,138 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
   }
 
   Widget _buildSummaryCard(List<Memory> memories) {
-    final now = DateTime.now();
-    final todayCount = memories
-        .where((m) => _isSameDay(m.createdAt, now))
-        .length;
-    final remindersCount = memories.where((m) => m.reminderAt != null).length;
-    final ideasCount = memories.where((m) => m.tags.contains('Idea')).length;
-    final lastActivity = _getLastActivityText(memories);
+    return FutureBuilder<DashboardSummary>(
+      future: sl<SummaryService>().getSummary(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20.0),
+              child: CircularProgressIndicator(color: AppColors.brandPrimary),
+            ),
+          );
+        }
+        if (!snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
 
-    return MemoryGlassCard(
-      padding: AppSpacing.pAll20,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+        final summary = snapshot.data!;
+        String titleText = 'Daily Briefing';
+        String subtitleText = '';
+        IconData titleIcon = Icons.insights;
+        Color titleColor = AppColors.brandPrimary;
+        
+        List<Widget> summaryItems = [];
+
+        if (summary.todayCaptures == 0) {
+          subtitleText = "Nothing captured today. Capture something worth remembering.";
+          titleColor = AppColors.textDarkSecondary;
+        } else {
+          summaryItems.add(_SummaryBullet('• ${summary.todayCaptures} Memories Captured Today'));
+        }
+
+        if (summary.yesterdayCaptures > 0 && summary.todayCaptures == 0) {
+          summaryItems.add(_SummaryBullet('• Yesterday you captured ${summary.yesterdayCaptures} memories'));
+        }
+
+        if (summary.upcomingRemindersToday > 0) {
+          titleText = 'Needs Attention';
+          titleColor = AppColors.brandSecondary;
+          subtitleText = "You have ${summary.upcomingRemindersToday} things waiting for you.";
+          summaryItems.add(_SummaryBullet('• ${summary.upcomingRemindersToday} Upcoming Reminder${summary.upcomingRemindersToday > 1 ? "s" : ""}'));
+        }
+
+        if (summary.missedReminders > 0) {
+          titleText = 'Overdue';
+          titleColor = AppColors.error;
+          subtitleText = "Some things slipped through the cracks.";
+          summaryItems.add(_SummaryBullet('• ${summary.missedReminders} Missed Reminder${summary.missedReminders > 1 ? "s" : ""}'));
+        }
+
+        if (summary.pinnedCount > 0) {
+          summaryItems.add(_SummaryBullet('• ${summary.pinnedCount} Pinned Memor${summary.pinnedCount > 1 ? "ies" : "y"}'));
+        }
+
+        if (summary.currentStreak > 0) {
+          summaryItems.add(_SummaryBullet('• ${summary.currentStreak} Day Capture Streak 🔥'));
+        }
+
+        if (summary.thisWeekCaptures > 0) {
+          summaryItems.add(_SummaryBullet('• ${summary.thisWeekCaptures} Captures This Week'));
+        }
+
+        String lastActivity = "No previous activity";
+        if (summary.lastActivity != null) {
+          final diff = DateTime.now().difference(summary.lastActivity!);
+          if (diff.inMinutes < 1) {
+            lastActivity = "Captured just now";
+          } else if (diff.inHours < 1) {
+            lastActivity = "Captured ${diff.inMinutes}m ago";
+          } else if (diff.inHours < 24) {
+            lastActivity = "Captured ${diff.inHours}h ago";
+          } else {
+            lastActivity = "Captured ${diff.inDays}d ago";
+          }
+        }
+
+        return MemoryGlassCard(
+          padding: AppSpacing.pAll20,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                  color: AppColors.success,
-                  shape: BoxShape.circle,
-                ),
+              Row(
+                children: [
+                  Icon(
+                    titleIcon,
+                    size: 16,
+                    color: titleColor,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    titleText,
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: AppColors.textDarkPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Today',
-                style: AppTextStyles.titleMedium.copyWith(
-                  color: AppColors.textDarkPrimary,
-                  fontWeight: FontWeight.bold,
+              if (subtitleText.isNotEmpty) ...[
+                AppSpacing.v8,
+                Text(
+                  subtitleText,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: titleColor,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
+              ],
+              if (summaryItems.isNotEmpty) ...[
+                AppSpacing.v16,
+                ...summaryItems,
+              ],
+              AppSpacing.v12,
+              Row(
+                children: [
+                  const Icon(
+                    Icons.access_time,
+                    size: 12,
+                    color: AppColors.textDarkTertiary,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    lastActivity,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.textDarkSecondary,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-          AppSpacing.v16,
-          _SummaryBullet('• $todayCount Memories Captured'),
-          _SummaryBullet(
-            '• $remindersCount Reminder${remindersCount != 1 ? "s" : ""}',
-          ),
-          _SummaryBullet('• $ideasCount Idea${ideasCount != 1 ? "s" : ""}'),
-          AppSpacing.v12,
-          Row(
-            children: [
-              const Icon(
-                Icons.access_time,
-                size: 12,
-                color: AppColors.textDarkTertiary,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                lastActivity,
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.textDarkSecondary,
-                  fontStyle: FontStyle.italic,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -941,22 +1030,134 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     return '$hourStr:$minStr';
   }
 
-  String _getLastActivityText(List<Memory> memories) {
-    if (memories.isEmpty) {
-      return 'No activity captured yet';
-    }
-    final latest = memories.first.createdAt;
-    final diff = DateTime.now().difference(latest);
-    if (diff.inMinutes < 1) {
-      return 'Last activity just now';
-    }
-    if (diff.inMinutes < 60) {
-      return 'Last activity ${diff.inMinutes} min ago';
-    }
-    if (diff.inHours < 24) {
-      return 'Last activity ${diff.inHours} hour${diff.inHours > 1 ? "s" : ""} ago';
-    }
-    return 'Last activity ${diff.inDays} day${diff.inDays > 1 ? "s" : ""} ago';
+  Widget _buildInsightsCard() {
+    return FutureBuilder<InsightsResult>(
+      future: sl<InsightService>().getInsights(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const MemoryGlassCard(
+            padding: AppSpacing.pAll24,
+            child: Center(
+              child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: CircularProgressIndicator(color: AppColors.brandPrimary),
+              ),
+            ),
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+
+        final result = snapshot.data!;
+
+        if (!result.hasEnoughData) {
+          return MemoryGlassCard(
+            padding: AppSpacing.pAll24,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.lock_outline,
+                  size: 32,
+                  color: AppColors.textDarkTertiary,
+                ),
+                AppSpacing.v12,
+                Text(
+                  'Keep capturing memories to unlock insights.',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.textDarkPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                AppSpacing.v8,
+                Text(
+                  'As you store more of your life fragments, MemoryOS will reveal personal patterns.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textDarkSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        return MemoryGlassCard(
+          padding: AppSpacing.pAll20,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(
+                    Icons.auto_awesome_outlined,
+                    size: 16,
+                    color: AppColors.brandPrimary,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Memory Insights',
+                    style: AppTextStyles.titleMedium.copyWith(
+                      color: AppColors.textDarkPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              AppSpacing.v16,
+              ...result.insights.map((insight) {
+                final isLast = result.insights.last == insight;
+                return Padding(
+                  padding: EdgeInsets.only(bottom: isLast ? 0.0 : 16.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.brandPrimary.withAlpha(20),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          insight.icon,
+                          size: 16,
+                          color: AppColors.brandPrimary,
+                        ),
+                      ),
+                      AppSpacing.h12,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              insight.headline,
+                              style: AppTextStyles.titleSmall.copyWith(
+                                color: AppColors.textDarkPrimary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            AppSpacing.v4,
+                            Text(
+                              insight.description,
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                color: AppColors.textDarkSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

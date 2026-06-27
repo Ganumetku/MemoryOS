@@ -13,6 +13,7 @@ import '../../domain/entities/memory.dart';
 import '../bloc/memory_cubit.dart';
 import '../bloc/memory_state.dart';
 import '../../../../core/utils/memory_type_helper.dart';
+import '../../../../core/services/memory_connection_service.dart';
 
 /// Screen representing the detailed visualization of a stored Memory fragment.
 /// Integrates App Bar actions (Edit content, Toggle Pin, Delete) and showcases metadata logs.
@@ -444,15 +445,6 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                               child: Column(
                                 children: [
                                   _buildMetadataRow(
-                                    Icons.psychology_outlined,
-                                    'Related Memories',
-                                    'Coming Soon',
-                                  ),
-                                  const Divider(
-                                    color: AppColors.bgDarkTertiary,
-                                    height: 24,
-                                  ),
-                                  _buildMetadataRow(
                                     Icons.notifications_none_outlined,
                                     'Reminder',
                                     m.reminderAt != null
@@ -480,6 +472,21 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                                 ],
                               ),
                             ),
+
+                            AppSpacing.v40,
+
+                            // Related Memories Section Header
+                            Text(
+                              'RELATED MEMORIES',
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: AppColors.textDarkTertiary,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                            AppSpacing.v16,
+
+                            _buildRelatedMemoriesSection(context, m),
                           ],
                         ),
                       ),
@@ -553,6 +560,193 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRelatedMemoriesSection(BuildContext context, Memory memory) {
+    return FutureBuilder<List<RelatedMemory>>(
+      future: sl<MemoryConnectionService>().getRelatedMemories(memory),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20.0),
+              child: CircularProgressIndicator(color: AppColors.brandPrimary),
+            ),
+          );
+        }
+
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return MemoryGlassCard(
+            padding: AppSpacing.pAll24,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.psychology_outlined,
+                  size: 40,
+                  color: AppColors.textDarkTertiary,
+                ),
+                AppSpacing.v12,
+                Text(
+                  'No connected memories yet.',
+                  style: AppTextStyles.titleMedium.copyWith(
+                    color: AppColors.textDarkPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                AppSpacing.v8,
+                Text(
+                  'As you capture more, MemoryOS will connect them.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: AppColors.textDarkSecondary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          );
+        }
+
+        final related = snapshot.data!;
+        
+        return Column(
+          children: related.map((r) => _buildRelatedMemoryCard(context, r)).toList(),
+        );
+      },
+    );
+  }
+
+  Widget _buildRelatedMemoryCard(BuildContext context, RelatedMemory relatedMemory) {
+    final typeConfig = MemoryTypeHelper.getConfig(relatedMemory.memory.type);
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: MemoryGlassCard(
+        padding: EdgeInsets.zero,
+        onTap: () {
+          // Push a new memory detail page
+          final memoryCubit = context.read<MemoryCubit>();
+          context.push('/memories/${relatedMemory.memory.id}').then((_) {
+            // refresh this page when returning, if necessary
+            if (mounted) {
+              memoryCubit.fetchMemories();
+            }
+          });
+        },
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                width: 4,
+                decoration: BoxDecoration(
+                  color: typeConfig.color,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    bottomLeft: Radius.circular(16),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: AppSpacing.pAll16,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Icon(
+                            typeConfig.icon,
+                            size: 14,
+                            color: typeConfig.color,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              relatedMemory.memory.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTextStyles.titleMedium.copyWith(
+                                color: AppColors.textDarkPrimary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          AppSpacing.h8,
+                          Text(
+                            '${relatedMemory.similarityPercentage}% match',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.textDarkTertiary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      AppSpacing.v8,
+                      Text(
+                        relatedMemory.memory.content,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textDarkSecondary,
+                        ),
+                      ),
+                      if (relatedMemory.reasons.isNotEmpty) ...[
+                        AppSpacing.v8,
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: relatedMemory.reasons.map((reason) {
+                            return Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: AppColors.bgDarkTertiary,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                reason,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.brandPrimary.withAlpha(200),
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                      AppSpacing.v8,
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.calendar_today,
+                            size: 10,
+                            color: AppColors.textDarkTertiary,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            _formatDateTime(relatedMemory.memory.createdAt),
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.textDarkTertiary,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

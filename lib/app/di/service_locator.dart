@@ -9,6 +9,9 @@ import '../../core/services/storage_service.dart';
 
 import '../../core/logger/logger_service.dart';
 import '../../core/network/network_info.dart';
+import '../../core/services/memory_connection_service.dart';
+import '../../core/services/summary_service.dart';
+import '../../core/services/insight_service.dart';
 import '../../features/memories/data/datasources/memory_local_datasource.dart';
 import '../../features/memories/data/models/memory_model.dart';
 import '../../features/memories/data/repositories/memory_repository_impl.dart';
@@ -60,6 +63,19 @@ Future<void> initServiceLocator() async {
   // Network Info / Internet Connection
   sl.registerLazySingleton(() => InternetConnectionChecker());
   sl.registerLazySingleton<NetworkInfo>(() => NetworkInfoImpl(sl()));
+
+  // Summary Service
+  sl.registerLazySingleton<SummaryService>(() => SummaryService(sl()));
+
+  // Memory Connection Service
+  sl.registerLazySingleton<MemoryConnectionService>(
+    () => MemoryConnectionService(sl()),
+  );
+
+  // Insight Service
+  sl.registerLazySingleton<InsightService>(
+    () => InsightService(sl(), sl()),
+  );
 
   // ==========================================
   // Memories Feature
