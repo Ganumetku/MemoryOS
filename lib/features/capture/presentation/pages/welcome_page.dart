@@ -13,6 +13,8 @@ import '../bloc/capture_cubit.dart';
 import '../bloc/capture_state.dart';
 import '../widgets/capture_bottom_sheet.dart';
 import '../widgets/success_card.dart';
+import '../../../memories/presentation/bloc/memory_cubit.dart';
+import '../widgets/smart_analysis_bottom_sheet.dart';
 
 /// Screen 001 - Welcome Page.
 /// Displays the headline copy, capture trigger button, and renders loading / success overlays.
@@ -33,7 +35,7 @@ class _WelcomePageView extends StatelessWidget {
   const _WelcomePageView();
 
   void _showCaptureSheet(BuildContext context, CaptureCubit cubit) {
-    showModalBottomSheet(
+    showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -44,7 +46,28 @@ class _WelcomePageView extends StatelessWidget {
           child: const CaptureBottomSheet(),
         );
       },
-    );
+    ).then((voiceTranscript) {
+      if (voiceTranscript is String && voiceTranscript.trim().isNotEmpty) {
+        if (context.mounted) {
+          showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) {
+              return MultiBlocProvider(
+                providers: [
+                  BlocProvider.value(value: cubit),
+                  BlocProvider(create: (_) => sl<MemoryCubit>()),
+                ],
+                child: SmartAnalysisBottomSheet(
+                  rawContent: voiceTranscript,
+                ),
+              );
+            },
+          );
+        }
+      }
+    });
   }
 
   void _completeOnboarding(BuildContext context) async {

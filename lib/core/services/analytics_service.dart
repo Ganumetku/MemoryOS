@@ -3,6 +3,42 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../features/memories/data/models/memory_model.dart';
 import '../../features/memories/data/models/follow_up_model.dart';
 
+class WeeklyReviewData {
+  final int totalMemories;
+  final String topCategory;
+  final String topKeyword;
+  final double reminderCompletionRate;
+  final int longestStreak;
+
+  WeeklyReviewData({
+    required this.totalMemories,
+    required this.topCategory,
+    required this.topKeyword,
+    required this.reminderCompletionRate,
+    required this.longestStreak,
+  });
+}
+
+class MonthlyReviewData {
+  final int monthlyCaptures;
+  final String mostActiveCategory;
+  final String mostActiveKeyword;
+  final String topPerson;
+  final int completedReminders;
+  final int missedReminders;
+  final int scheduledReminders;
+
+  MonthlyReviewData({
+    required this.monthlyCaptures,
+    required this.mostActiveCategory,
+    required this.mostActiveKeyword,
+    required this.topPerson,
+    required this.completedReminders,
+    required this.missedReminders,
+    required this.scheduledReminders,
+  });
+}
+
 class AnalyticsService {
   final Isar _isar;
   final SharedPreferences _prefs;
@@ -221,16 +257,166 @@ class AnalyticsService {
     return mostOpened;
   }
 
+  // Periodic Reviews Calculations
+  Future<WeeklyReviewData> getWeeklyReviewData() async {
+    final now = DateTime.now();
+    final sevenDaysAgo = now.subtract(const Duration(days: 7));
+
+    final weeklyMemories = await _isar.memoryModels
+        .filter()
+        .createdAtGreaterThan(sevenDaysAgo)
+        .findAll();
+
+    final total = await getTotalMemories();
+
+    final typeCounts = <String, int>{};
+    for (final m in weeklyMemories) {
+      typeCounts[m.type] = (typeCounts[m.type] ?? 0) + 1;
+    }
+    String topCat = "None";
+    if (typeCounts.isNotEmpty) {
+      final sortedTypes = typeCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      topCat = sortedTypes.first.key;
+    }
+
+    final keywordCounts = <String, int>{};
+    for (final m in weeklyMemories) {
+      for (final t in m.tags) {
+        if (_isCategory(t)) continue;
+        keywordCounts[t] = (keywordCounts[t] ?? 0) + 1;
+      }
+    }
+    String topKey = "None";
+    if (keywordCounts.isNotEmpty) {
+      final sortedKeys = keywordCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      topKey = sortedKeys.first.key;
+    }
+
+    final weeklyReminders = await _isar.memoryModels
+        .filter()
+        .reminderAtBetween(sevenDaysAgo, now)
+        .findAll();
+    
+    double completionRate = 0.0;
+    if (weeklyReminders.isNotEmpty) {
+      int completed = 0;
+      int totalReminders = 0;
+      for (final r in weeklyReminders) {
+        totalReminders++;
+        if (r.tags.contains('completed_reminder')) {
+          completed++;
+        }
+      }
+      if (totalReminders > 0) {
+        completionRate = (completed / totalReminders) * 100.0;
+      }
+    }
+
+    final streak = await getLongestStreak();
+
+    return WeeklyReviewData(
+      totalMemories: total,
+      topCategory: topCat,
+      topKeyword: topKey,
+      reminderCompletionRate: completionRate,
+      longestStreak: streak,
+    );
+  }
+
+  Future<MonthlyReviewData> getMonthlyReviewData() async {
+    final now = DateTime.now();
+    final thirtyDaysAgo = now.subtract(const Duration(days: 30));
+
+    final monthlyMemories = await _isar.memoryModels
+        .filter()
+        .createdAtGreaterThan(thirtyDaysAgo)
+        .findAll();
+
+    final monthlyCaptures = monthlyMemories.length;
+
+    final typeCounts = <String, int>{};
+    for (final m in monthlyMemories) {
+      typeCounts[m.type] = (typeCounts[m.type] ?? 0) + 1;
+    }
+    String topCat = "None";
+    if (typeCounts.isNotEmpty) {
+      final sortedTypes = typeCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      topCat = sortedTypes.first.key;
+    }
+
+    final keywordCounts = <String, int>{};
+    for (final m in monthlyMemories) {
+      for (final t in m.tags) {
+        if (_isCategory(t)) continue;
+        keywordCounts[t] = (keywordCounts[t] ?? 0) + 1;
+      }
+    }
+    String topKey = "None";
+    if (keywordCounts.isNotEmpty) {
+      final sortedKeys = keywordCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      topKey = sortedKeys.first.key;
+    }
+
+    final personRegex = RegExp(r'^(?:Dr\.?\s+)?[A-Z][a-zA-Z]+$');
+    final nameCounts = <String, int>{};
+    for (final m in monthlyMemories) {
+      for (final t in m.tags) {
+        if (_isCategory(t)) continue;
+        if (personRegex.hasMatch(t)) {
+          nameCounts[t] = (nameCounts[t] ?? 0) + 1;
+        }
+      }
+    }
+    String topPerson = "None";
+    if (nameCounts.isNotEmpty) {
+      final sortedNames = nameCounts.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+      topPerson = sortedNames.first.key;
+    }
+
+    int completed = 0;
+    int missed = 0;
+    int scheduled = 0;
+
+    final monthlyReminders = await _isar.memoryModels
+        .filter()
+        .reminderAtIsNotNull()
+        .and()
+        .reminderAtGreaterThan(thirtyDaysAgo)
+        .findAll();
+
+    for (final r in monthlyReminders) {
+      if (r.tags.contains('completed_reminder')) {
+        completed++;
+      } else if (r.reminderAt!.isBefore(now)) {
+        missed++;
+      } else {
+        scheduled++;
+      }
+    }
+
+    return MonthlyReviewData(
+      monthlyCaptures: monthlyCaptures,
+      mostActiveCategory: topCat,
+      mostActiveKeyword: topKey,
+      topPerson: topPerson,
+      completedReminders: completed,
+      missedReminders: missed,
+      scheduledReminders: scheduled,
+    );
+  }
+
   // Helpers
   bool _isSameDay(DateTime a, DateTime b) {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
   bool _isCategory(String tag) {
+    final normalized = tag.toLowerCase().trim();
     const categories = {
       'idea', 'health', 'work', 'personal', 'finance', 'shopping',
-      'travel', 'birthday', 'meeting', 'reminder', 'task'
+      'travel', 'birthday', 'meeting', 'reminder', 'task',
+      'learning', 'fitness', 'family', 'startup', 'events', 'other', 'reflection'
     };
-    return categories.contains(tag.toLowerCase());
+    return categories.contains(normalized);
   }
 }

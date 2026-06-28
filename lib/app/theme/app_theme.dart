@@ -37,6 +37,13 @@ class AppTheme {
           side: const BorderSide(color: AppColors.bgDarkTertiary, width: 1.5),
         ),
       ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.bgDarkSecondary,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+      ),
 
       // App Bar Style
       appBarTheme: const AppBarTheme(
@@ -192,6 +199,13 @@ class AppTheme {
         shape: RoundedRectangleBorder(
           borderRadius: AppRadius.brAll16,
           side: const BorderSide(color: AppColors.bgLightTertiary, width: 1.5),
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.bgLightSecondary,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
         ),
       ),
 

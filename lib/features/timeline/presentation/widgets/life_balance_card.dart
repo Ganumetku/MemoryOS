@@ -4,6 +4,7 @@ import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/services/life_area_service.dart';
+import '../../../../core/services/life_area_analytics_service.dart';
 import '../../../../core/utils/memory_type_helper.dart';
 
 class LifeBalanceCard extends StatelessWidget {
@@ -11,20 +12,30 @@ class LifeBalanceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, double>>(
-      future: sl<LifeAreaService>().getLifeBalance(),
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait([
+        sl<LifeAreaService>().getLifeBalance(),
+        sl<LifeAreaAnalyticsService>().getTotalMemoriesPerArea(),
+      ]),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox.shrink();
         }
 
-        final data = snapshot.data;
-        if (data == null || data.isEmpty) {
+        final results = snapshot.data;
+        final Map<String, double> data = (results != null && results.isNotEmpty)
+            ? results[0] as Map<String, double>
+            : {};
+        final Map<String, int> counts = (results != null && results.length > 1)
+            ? results[1] as Map<String, int>
+            : {};
+
+        if (data.isEmpty) {
           return Container(
-            padding: AppSpacing.pAll20,
+            padding: AppSpacing.pAll24,
             decoration: BoxDecoration(
               color: AppColors.bgDarkSecondary.withAlpha(150),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: AppColors.bgDarkTertiary,
                 width: 1.0,
@@ -67,10 +78,10 @@ class LifeBalanceCard extends StatelessWidget {
           ..sort((a, b) => b.value.compareTo(a.value));
 
         return Container(
-          padding: AppSpacing.pAll20,
+          padding: AppSpacing.pAll24,
           decoration: BoxDecoration(
             color: AppColors.bgDarkSecondary.withAlpha(150),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(24),
             border: Border.all(
               color: AppColors.bgDarkTertiary,
               width: 1.0,
@@ -97,10 +108,22 @@ class LifeBalanceCard extends StatelessWidget {
                 ],
               ),
               AppSpacing.v16,
-              ...sortedEntries.map((entry) {
+              ...List.generate(sortedEntries.length, (index) {
+                final entry = sortedEntries[index];
                 final area = entry.key;
                 final percentage = entry.value;
+                final count = counts[area] ?? 0;
                 final config = MemoryTypeHelper.getConfig(area);
+
+                // Show percentage only if it's the first element or different from the previous element's percentage
+                final bool showPercentage = (index == 0) || 
+                    (percentage.toStringAsFixed(0) != sortedEntries[index - 1].value.toStringAsFixed(0));
+
+                final memoryWord = count == 1 ? "memory" : "memories";
+                final countText = "($count $memoryWord)";
+                final String labelText = showPercentage 
+                    ? '${percentage.toStringAsFixed(0)}% $countText'
+                    : countText;
 
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 12.0),
@@ -127,7 +150,7 @@ class LifeBalanceCard extends StatelessWidget {
                             ],
                           ),
                           Text(
-                            '${percentage.toStringAsFixed(0)}%',
+                            labelText,
                             style: AppTextStyles.bodyMedium.copyWith(
                               color: AppColors.textDarkSecondary,
                               fontWeight: FontWeight.bold,
@@ -138,11 +161,18 @@ class LifeBalanceCard extends StatelessWidget {
                       const SizedBox(height: 6),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: percentage / 100,
-                          backgroundColor: AppColors.bgDarkTertiary,
-                          valueColor: AlwaysStoppedAnimation<Color>(config.color),
-                          minHeight: 6,
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0.0, end: percentage / 100.0),
+                          duration: const Duration(milliseconds: 900),
+                          curve: Curves.easeOutCubic,
+                          builder: (context, value, child) {
+                            return LinearProgressIndicator(
+                              value: value,
+                              backgroundColor: AppColors.bgDarkTertiary,
+                              valueColor: AlwaysStoppedAnimation<Color>(config.color),
+                              minHeight: 6,
+                            );
+                          },
                         ),
                       ),
                     ],

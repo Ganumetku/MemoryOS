@@ -18,6 +18,7 @@ import '../../core/services/home_experience_service.dart';
 import '../../core/services/life_area_service.dart';
 import '../../core/services/life_area_analytics_service.dart';
 import '../../core/parser/life_area_parser.dart';
+import '../../core/services/recall_engine_service.dart';
 import '../../features/memories/data/datasources/memory_local_datasource.dart';
 import '../../features/memories/data/models/memory_model.dart';
 import '../../features/memories/data/models/follow_up_model.dart';
@@ -30,6 +31,9 @@ import '../../features/memories/domain/usecases/update_memory_usecase.dart';
 import '../../core/services/notification_service.dart';
 import '../../features/capture/presentation/bloc/capture_cubit.dart';
 import '../../features/memories/presentation/bloc/memory_cubit.dart';
+import '../../core/services/memory_brain_service.dart';
+import '../../features/search/domain/repositories/search_history_repository.dart';
+import '../../features/search/data/repositories/search_history_repository_impl.dart';
 
 /// Global service locator instance.
 final GetIt sl = GetIt.instance;
@@ -100,6 +104,21 @@ Future<void> initServiceLocator() async {
   // HomeExperience Service
   sl.registerLazySingleton<HomeExperienceService>(
     () => HomeExperienceService(sl(), sl()),
+  );
+
+  // Recall Engine Service
+  sl.registerLazySingleton<RecallEngineService>(
+    () => LocalRecallEngineServiceImpl(),
+  );
+
+  // Search History Repository
+  sl.registerLazySingleton<SearchHistoryRepository>(
+    () => SearchHistoryRepositoryImpl(sl()),
+  );
+
+  // Memory Brain Service
+  sl.registerLazySingleton<MemoryBrainService>(
+    () => MemoryBrainService(sl()),
   );
 
   // LifeArea Services

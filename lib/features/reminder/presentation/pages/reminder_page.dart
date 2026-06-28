@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -7,16 +8,17 @@ import '../../../../core/utils/memory_type_helper.dart';
 
 import '../../../../app/di/service_locator.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../shared/widgets/memory_empty_state.dart';
 import '../../../../shared/widgets/memory_glass_card.dart';
-import '../../../../shared/widgets/memory_loading_indicator.dart';
+import '../../../../shared/widgets/loading_skeletons.dart';
 import '../../../memories/domain/entities/memory.dart';
 import '../../../memories/presentation/bloc/memory_cubit.dart';
 import '../../../memories/presentation/bloc/memory_state.dart';
+import '../../../capture/presentation/bloc/capture_cubit.dart';
+import '../../../capture/presentation/widgets/capture_bottom_sheet.dart';
 
 /// Reminder Center screen displaying all upcoming and past memory reminder logs.
 class ReminderPage extends StatelessWidget {
@@ -76,6 +78,7 @@ class ReminderPage extends StatelessWidget {
   ) {
     final isCompleted = memory.tags.contains('completed_reminder');
 
+    HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -84,12 +87,24 @@ class ReminderPage extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           decoration: BoxDecoration(
             color: AppColors.bgDarkSecondary,
-            borderRadius: AppRadius.brTop24,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 20),
+                  decoration: BoxDecoration(
+                    color: AppColors.textDarkTertiary.withAlpha(80),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
               Text(
                 'Reminder Controls',
                 textAlign: TextAlign.center,
@@ -116,6 +131,7 @@ class ReminderPage extends StatelessWidget {
                   ),
                 ),
                 onTap: () {
+                  HapticFeedback.lightImpact();
                   Navigator.pop(context);
                   cubit.toggleReminderCompleted(memory);
                 },
@@ -135,6 +151,7 @@ class ReminderPage extends StatelessWidget {
                   ),
                 ),
                 onTap: () async {
+                  HapticFeedback.lightImpact();
                   Navigator.pop(context);
                   await _rescheduleFlow(context, memory, cubit);
                 },
@@ -154,6 +171,7 @@ class ReminderPage extends StatelessWidget {
                   ),
                 ),
                 onTap: () {
+                  HapticFeedback.lightImpact();
                   Navigator.pop(context);
                   cubit.cancelReminder(memory);
                 },
@@ -282,7 +300,7 @@ class ReminderPage extends StatelessWidget {
               final cubit = context.read<MemoryCubit>();
 
               if (state is MemoryLoading) {
-                return const Center(child: MemoryLoadingIndicator());
+                return const TimelineSkeleton();
               }
 
               if (state is MemoryError) {
@@ -327,6 +345,28 @@ class ReminderPage extends StatelessWidget {
                           icon: Icons.notifications_none,
                           title: 'Nothing scheduled.',
                           description: "I'll tell you when something matters.",
+                          actionLabel: 'Schedule Reminder',
+                          onActionPressed: () {
+                            HapticFeedback.lightImpact();
+                            showModalBottomSheet<dynamic>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) {
+                                return MultiBlocProvider(
+                                  providers: [
+                                    BlocProvider.value(value: cubit),
+                                    BlocProvider(create: (_) => sl<CaptureCubit>()),
+                                  ],
+                                  child: const CaptureBottomSheet(),
+                                );
+                              },
+                            ).then((_) {
+                              if (context.mounted) {
+                                cubit.fetchMemories();
+                              }
+                            });
+                          },
                         ),
                       )
                     else ...[
@@ -468,9 +508,12 @@ class ReminderPage extends StatelessWidget {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor: statusColor.withAlpha(20),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: statusColor.withAlpha(20),
+                            shape: BoxShape.circle,
+                          ),
                           child: Icon(statusIcon, color: statusColor, size: 18),
                         ),
                         AppSpacing.h16,

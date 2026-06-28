@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -197,6 +198,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
           ),
           TextButton(
             onPressed: () {
+              HapticFeedback.lightImpact();
               cubit.removeMemory(memory.id);
               Navigator.pop(dialogCtx); // Pop dialog
               context.pop(); // Pop Detail Page
@@ -362,14 +364,20 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                           ? AppColors.brandPrimary
                           : AppColors.textDarkSecondary,
                     ),
-                    onPressed: () => cubit.togglePin(m),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      cubit.togglePin(m);
+                    },
                   ),
                   IconButton(
                     icon: const Icon(
                       Icons.delete_outline,
                       color: AppColors.error,
                     ),
-                    onPressed: () => _confirmDelete(context, m, cubit),
+                    onPressed: () {
+                      HapticFeedback.lightImpact();
+                      _confirmDelete(context, m, cubit);
+                    },
                   ),
                 ],
               ),
@@ -651,7 +659,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                 ),
                 AppSpacing.v8,
                 Text(
-                  'As you capture more, MemoryOS will connect them.',
+                  'Keep capturing, I’ll connect them.',
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: AppColors.textDarkSecondary,
                   ),

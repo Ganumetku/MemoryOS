@@ -4,6 +4,8 @@ import '../../features/memories/data/models/memory_model.dart';
 import '../../features/memories/data/models/follow_up_model.dart';
 import '../../features/memories/domain/entities/memory.dart';
 import 'memory_connection_service.dart';
+import 'analytics_service.dart';
+import '../../app/di/service_locator.dart';
 
 enum TimePeriod { morning, afternoon, evening, night }
 
@@ -16,7 +18,9 @@ class HomeExperienceData {
   
   // Morning stats
   final int todayRemindersCount;
-  final int upcomingFollowUpsCount;
+  final MemoryModel? firstUpcomingReminder;
+  final int yesterdayMemoriesCount;
+  final int currentStreak;
   final String motivationalLine;
   
   // Afternoon stats
@@ -30,6 +34,8 @@ class HomeExperienceData {
   // Night stats
   final int completedTodayCount;
   final int tomorrowRemindersCount;
+  final int ideasCapturedCount;
+  final int missedRemindersCount;
 
   HomeExperienceData({
     required this.period,
@@ -38,7 +44,9 @@ class HomeExperienceData {
     required this.icon,
     required this.accentColor,
     required this.todayRemindersCount,
-    required this.upcomingFollowUpsCount,
+    required this.firstUpcomingReminder,
+    required this.yesterdayMemoriesCount,
+    required this.currentStreak,
     required this.motivationalLine,
     required this.todayCapturesCount,
     required this.completedRemindersCount,
@@ -46,6 +54,8 @@ class HomeExperienceData {
     required this.connectionsCreatedCount,
     required this.completedTodayCount,
     required this.tomorrowRemindersCount,
+    required this.ideasCapturedCount,
+    required this.missedRemindersCount,
   });
 }
 
@@ -57,9 +67,9 @@ class HomeExperienceService {
 
   TimePeriod getCurrentPeriod() {
     final hour = DateTime.now().hour;
-    if (hour >= 5 && hour < 11) {
+    if (hour >= 5 && hour < 12) {
       return TimePeriod.morning;
-    } else if (hour >= 11 && hour < 17) {
+    } else if (hour >= 12 && hour < 17) {
       return TimePeriod.afternoon;
     } else if (hour >= 17 && hour < 21) {
       return TimePeriod.evening;
@@ -88,12 +98,31 @@ class HomeExperienceService {
         .reminderAtBetween(startOfDay, endOfDay)
         .count();
 
-    final upcomingFollowUps = await _isar.followUpModels
+    // Calculate first upcoming reminder in the future
+    final allReminders = await _isar.memoryModels
         .filter()
-        .scheduledAtBetween(startOfDay, endOfDay)
+        .reminderAtIsNotNull()
         .and()
-        .statusEqualTo('pending')
+        .reminderAtGreaterThan(now)
+        .findAll();
+    
+    MemoryModel? firstUpcoming;
+    if (allReminders.isNotEmpty) {
+      allReminders.sort((a, b) => a.reminderAt!.compareTo(b.reminderAt!));
+      firstUpcoming = allReminders.first;
+    }
+
+    final startOfYesterday = startOfDay.subtract(const Duration(days: 1));
+    final endOfYesterday = startOfDay;
+    final yesterdayMemoriesCount = await _isar.memoryModels
+        .filter()
+        .createdAtBetween(startOfYesterday, endOfYesterday)
         .count();
+
+    int currentStreak = 0;
+    try {
+      currentStreak = await sl<AnalyticsService>().getCurrentStreak();
+    } catch (_) {}
 
     final motivationalLine = _getMotivationalLine(now.day);
 
@@ -104,7 +133,7 @@ class HomeExperienceService {
         .filter()
         .reminderAtBetween(startOfDay, endOfDay)
         .and()
-        .tagsElementContains('completed_reminder') // check tags
+        .tagsElementContains('completed_reminder')
         .count();
 
     // 3. Evening stats: connections created
@@ -127,7 +156,7 @@ class HomeExperienceService {
       }
     }
 
-    // 4. Night stats: completed today & tomorrow preview
+    // 4. Night stats: completed today & tomorrow preview & ideas & missed
     final completedFollowUpsToday = await _isar.followUpModels
         .filter()
         .statusEqualTo('completed')
@@ -139,6 +168,30 @@ class HomeExperienceService {
         .reminderAtBetween(startOfTomorrow, endOfTomorrow)
         .count();
 
+    // Ideas captured today: Startup, Learning types or keywords containing "idea"
+    int ideasCapturedCount = 0;
+    for (final m in todayMemories) {
+      final textLower = m.content.toLowerCase();
+      final titleLower = m.title.toLowerCase();
+      final isIdea = textLower.contains('idea') ||
+                     titleLower.contains('idea') ||
+                     m.type.toLowerCase().trim() == 'startup' ||
+                     m.type.toLowerCase().trim() == 'learning' ||
+                     m.tags.any((t) => t.toLowerCase().trim() == 'idea');
+      if (isIdea) {
+        ideasCapturedCount++;
+      }
+    }
+
+    // Missed reminders today: scheduled today in the past, not completed
+    final missedRemindersCount = await _isar.memoryModels
+        .filter()
+        .reminderAtBetween(startOfDay, now)
+        .and()
+        .not()
+        .tagsElementContains('completed_reminder')
+        .count();
+
     // Time-based config
     String greeting;
     String subtitle;
@@ -148,25 +201,25 @@ class HomeExperienceService {
     switch (period) {
       case TimePeriod.morning:
         greeting = "Good Morning";
-        subtitle = "Ready to focus?";
+        subtitle = "☀️ Ready to focus?";
         icon = Icons.wb_sunny_outlined;
         accentColor = const Color(0xFFFFD54F); // Amber/Gold
         break;
       case TimePeriod.afternoon:
         greeting = "Good Afternoon";
-        subtitle = "Halfway through the day.";
+        subtitle = "🚀 Let's keep momentum.";
         icon = Icons.wb_cloudy_outlined;
         accentColor = const Color(0xFF29B6F6); // Sky Blue
         break;
       case TimePeriod.evening:
         greeting = "Good Evening";
-        subtitle = "Reflecting on your day.";
+        subtitle = "🌙 Time to reflect.";
         icon = Icons.nights_stay_outlined;
         accentColor = const Color(0xFFAB47BC); // Twilight Purple
         break;
       case TimePeriod.night:
         greeting = "Good Night";
-        subtitle = "Rest up. Tomorrow is a new start.";
+        subtitle = "😴 Wind down and remember today.";
         icon = Icons.bedtime_outlined;
         accentColor = const Color(0xFF3F51B5); // Deep Indigo
         break;
@@ -179,7 +232,9 @@ class HomeExperienceService {
       icon: icon,
       accentColor: accentColor,
       todayRemindersCount: todayReminders,
-      upcomingFollowUpsCount: upcomingFollowUps,
+      firstUpcomingReminder: firstUpcoming,
+      yesterdayMemoriesCount: yesterdayMemoriesCount,
+      currentStreak: currentStreak,
       motivationalLine: motivationalLine,
       todayCapturesCount: todayCaptures,
       completedRemindersCount: completedReminders,
@@ -187,6 +242,8 @@ class HomeExperienceService {
       connectionsCreatedCount: connectionsCreated,
       completedTodayCount: completedToday,
       tomorrowRemindersCount: tomorrowReminders,
+      ideasCapturedCount: ideasCapturedCount,
+      missedRemindersCount: missedRemindersCount,
     );
   }
 

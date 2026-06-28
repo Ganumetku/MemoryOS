@@ -10,11 +10,16 @@ import '../../features/capture/presentation/pages/welcome_page.dart';
 import '../../features/memories/presentation/pages/memory_detail_page.dart';
 import '../../features/reminder/presentation/pages/notification_debug_page.dart';
 import '../../features/reminder/presentation/pages/reminder_page.dart';
+import '../../features/reminder/presentation/pages/reminder_detail_page.dart';
 import '../../features/ai_chat/presentation/pages/ai_chat_page.dart';
 import '../../features/search/presentation/pages/search_page.dart';
 import '../../features/search/presentation/pages/recall_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/settings/presentation/pages/developer_dashboard_page.dart';
+import '../../features/timeline/presentation/pages/reflection_page.dart';
+import '../../features/timeline/presentation/pages/weekly_review_page.dart';
+import '../../features/timeline/presentation/pages/monthly_review_page.dart';
+import '../../features/capture/presentation/pages/voice_capture_page.dart';
 
 /// Central routing management using [GoRouter].
 /// Outlines the entire navigation hierarchy for the MemoryOS application.
@@ -59,15 +64,54 @@ class AppRouter {
         ),
       ),
       GoRoute(
+        path: '/voice-capture',
+        pageBuilder: (context, state) => CustomTransitionPage(
+          key: state.pageKey,
+          child: const VoiceCapturePage(),
+          transitionDuration: const Duration(milliseconds: 300),
+          reverseTransitionDuration: const Duration(milliseconds: 300),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.92, end: 1.0).animate(
+                  CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  ),
+                ),
+                child: child,
+              ),
+            );
+          },
+        ),
+      ),
+      GoRoute(
         path: '/memories/:id',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final id = state.pathParameters['id'] ?? '';
-          return MemoryDetailPage(memoryId: id);
+          return _buildFadeSlideTransitionPage(
+            state: state,
+            child: MemoryDetailPage(memoryId: id),
+          );
         },
       ),
       GoRoute(
         path: '/reminder',
-        builder: (context, state) => const ReminderPage(),
+        pageBuilder: (context, state) => _buildFadeSlideTransitionPage(
+          state: state,
+          child: const ReminderPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/reminder/:id',
+        pageBuilder: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return _buildFadeSlideTransitionPage(
+            state: state,
+            child: ReminderDetailPage(reminderId: id),
+          );
+        },
       ),
       GoRoute(
         path: '/notification-debug',
@@ -80,14 +124,66 @@ class AppRouter {
       GoRoute(path: '/search', builder: (context, state) => const SearchPage()),
       GoRoute(
         path: '/settings',
-        builder: (context, state) => const SettingsPage(),
+        pageBuilder: (context, state) => _buildFadeSlideTransitionPage(
+          state: state,
+          child: const SettingsPage(),
+        ),
       ),
       GoRoute(
         path: '/developer-dashboard',
         builder: (context, state) => const DeveloperDashboardPage(),
       ),
+      GoRoute(
+        path: '/reflection',
+        builder: (context, state) => const ReflectionPage(),
+      ),
+      GoRoute(
+        path: '/weekly-review',
+        pageBuilder: (context, state) => _buildFadeSlideTransitionPage(
+          state: state,
+          child: const WeeklyReviewPage(),
+        ),
+      ),
+      GoRoute(
+        path: '/monthly-review',
+        pageBuilder: (context, state) => _buildFadeSlideTransitionPage(
+          state: state,
+          child: const MonthlyReviewPage(),
+        ),
+      ),
     ],
     errorBuilder: (context, state) =>
         Scaffold(body: Center(child: Text('Route error: ${state.error}'))),
   );
+
+  static Page<dynamic> _buildFadeSlideTransitionPage({
+    required GoRouterState state,
+    required Widget child,
+  }) {
+    return CustomTransitionPage(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 280),
+      reverseTransitionDuration: const Duration(milliseconds: 280),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final slideTween = Tween<Offset>(
+          begin: const Offset(0.0, 0.08),
+          end: Offset.zero,
+        ).chain(CurveTween(curve: Curves.easeOutCubic));
+
+        final fadeTween = Tween<double>(
+          begin: 0.0,
+          end: 1.0,
+        ).chain(CurveTween(curve: Curves.easeOutCubic));
+
+        return FadeTransition(
+          opacity: animation.drive(fadeTween),
+          child: SlideTransition(
+            position: animation.drive(slideTween),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
 }

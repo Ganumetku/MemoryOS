@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../app/theme/app_colors.dart';
 import '../../../../app/theme/app_radius.dart';
@@ -81,21 +83,21 @@ class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
       ),
       decoration: BoxDecoration(
         color: AppColors.bgDarkSecondary,
-        borderRadius: AppRadius.brTop24,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           // Drag Handle
           Container(
-            width: 40,
-            height: 4.5,
+            width: 36,
+            height: 4,
+            margin: const EdgeInsets.only(bottom: 20),
             decoration: BoxDecoration(
-              color: AppColors.bgDarkTertiary,
-              borderRadius: AppRadius.brAll8,
+              color: AppColors.textDarkTertiary.withAlpha(80),
+              borderRadius: BorderRadius.circular(2),
             ),
           ),
-          AppSpacing.v24,
 
           if (!_isWriting) ...[
             // Ingress Options Grid
@@ -112,12 +114,16 @@ class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
                 _OptionTile(
                   icon: Icons.mic_none_outlined,
                   label: 'Speak',
-                  isActive: false,
-                  onTap: () {
+                  isActive: true,
+                  heroTag: 'voice_speak_hero',
+                  onTap: () async {
                     try {
                       sl<AnalyticsService>().incrementCaptureCount('voice');
                     } catch (_) {}
-                    _showComingSoonToast(context, 'Speak capture');
+                    final result = await context.push<String>('/voice-capture');
+                    if (context.mounted) {
+                      Navigator.pop(context, result);
+                    }
                   },
                 ),
                 _OptionTile(
@@ -192,6 +198,7 @@ class _CaptureBottomSheetState extends State<CaptureBottomSheet> {
                     memoryCubit = context.read<MemoryCubit>();
                   } catch (_) {}
 
+                  HapticFeedback.lightImpact();
                   showModalBottomSheet<bool>(
                     context: context,
                     isScrollControlled: true,
@@ -229,12 +236,14 @@ class _OptionTile extends StatelessWidget {
   final String label;
   final bool isActive;
   final VoidCallback onTap;
+  final String? heroTag;
 
   const _OptionTile({
     required this.icon,
     required this.label,
     required this.isActive,
     required this.onTap,
+    this.heroTag,
   });
 
   @override
@@ -246,36 +255,48 @@ class _OptionTile extends StatelessWidget {
         ? AppColors.brandPrimary
         : AppColors.textDarkTertiary;
 
+    Widget innerCard = Container(
+      width: 72,
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: tileColor,
+        borderRadius: AppRadius.brAll16,
+        border: isActive
+            ? Border.all(
+                color: AppColors.brandPrimary.withAlpha(50),
+                width: 1.2,
+              )
+            : Border.all(color: Colors.transparent),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: contentColor, size: 24),
+          AppSpacing.v8,
+          Text(
+            label,
+            style: AppTextStyles.labelSmall.copyWith(
+              color: contentColor,
+              fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (heroTag != null) {
+      innerCard = Hero(
+        tag: heroTag!,
+        child: Material(
+          type: MaterialType.transparency,
+          child: innerCard,
+        ),
+      );
+    }
+
     return InkWell(
       onTap: onTap,
       borderRadius: AppRadius.brAll16,
-      child: Container(
-        width: 72,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: tileColor,
-          borderRadius: AppRadius.brAll16,
-          border: isActive
-              ? Border.all(
-                  color: AppColors.brandPrimary.withAlpha(50),
-                  width: 1.2,
-                )
-              : Border.all(color: Colors.transparent),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: contentColor, size: 24),
-            AppSpacing.v8,
-            Text(
-              label,
-              style: AppTextStyles.labelSmall.copyWith(
-                color: contentColor,
-                fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
-              ),
-            ),
-          ],
-        ),
-      ),
+      child: innerCard,
     );
   }
 }

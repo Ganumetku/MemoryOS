@@ -17,6 +17,13 @@ class MemoryTypeHelper {
   MemoryTypeHelper._();
 
   static MemoryTypeConfig getConfig(String? type) {
+    if (type?.toLowerCase().trim() == 'reflection') {
+      return const MemoryTypeConfig(
+        icon: Icons.psychology_outlined,
+        color: Color(0xFFE040FB), // Purple/Magenta
+        emoji: '💭',
+      );
+    }
     final area = LifeArea.fromName(type);
     return MemoryTypeConfig(
       icon: area.icon,

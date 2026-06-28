@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../app/theme/app_colors.dart';
@@ -54,7 +55,7 @@ class _MemoryOptionsBottomSheetState extends State<MemoryOptionsBottomSheet> {
       ),
       decoration: BoxDecoration(
         color: AppColors.bgDarkSecondary,
-        borderRadius: AppRadius.brTop24,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
         border: Border.all(
           color: AppColors.bgDarkTertiary.withAlpha(128),
           width: 1.0,
@@ -67,15 +68,15 @@ class _MemoryOptionsBottomSheetState extends State<MemoryOptionsBottomSheet> {
           // Drag handle
           Center(
             child: Container(
-              width: 40,
-              height: 4.5,
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 20),
               decoration: BoxDecoration(
-                color: AppColors.bgDarkTertiary,
-                borderRadius: AppRadius.brAll8,
+                color: AppColors.textDarkTertiary.withAlpha(80),
+                borderRadius: BorderRadius.circular(2),
               ),
             ),
           ),
-          AppSpacing.v24,
 
           if (!_isEditing) ...[
             // General Menu Options
@@ -97,6 +98,7 @@ class _MemoryOptionsBottomSheetState extends State<MemoryOptionsBottomSheet> {
               label: widget.memory.isPinned ? 'Unpin Memory' : 'Pin Memory',
               color: AppColors.brandPrimary,
               onTap: () {
+                HapticFeedback.lightImpact();
                 memoryCubit.togglePin(widget.memory);
                 Navigator.pop(context);
               },
@@ -109,6 +111,7 @@ class _MemoryOptionsBottomSheetState extends State<MemoryOptionsBottomSheet> {
               label: 'Edit Details',
               color: AppColors.brandSecondary,
               onTap: () {
+                HapticFeedback.lightImpact();
                 setState(() {
                   _isEditing = true;
                 });
@@ -122,6 +125,7 @@ class _MemoryOptionsBottomSheetState extends State<MemoryOptionsBottomSheet> {
               label: 'Delete Memory',
               color: AppColors.error,
               onTap: () {
+                HapticFeedback.lightImpact();
                 _showDeleteConfirmation(context, memoryCubit);
               },
             ),
@@ -166,6 +170,7 @@ class _MemoryOptionsBottomSheetState extends State<MemoryOptionsBottomSheet> {
                 final newTitle = _titleController.text;
                 final newContent = _contentController.text;
                 if (newContent.trim().isNotEmpty) {
+                  HapticFeedback.lightImpact();
                   memoryCubit.updateMemoryContent(
                     widget.memory,
                     newTitle,
@@ -210,6 +215,7 @@ class _MemoryOptionsBottomSheetState extends State<MemoryOptionsBottomSheet> {
           ),
           TextButton(
             onPressed: () {
+              HapticFeedback.lightImpact();
               cubit.removeMemory(widget.memory.id);
               Navigator.pop(dialogCtx); // close dialog
               Navigator.pop(context); // close sheet

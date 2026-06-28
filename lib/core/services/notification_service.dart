@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import '../../app/di/service_locator.dart';
+import '../../app/router/app_router.dart';
 import 'analytics_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -131,7 +132,15 @@ class NotificationServiceImpl implements NotificationService {
         iOS: iosSettings,
       );
 
-      await _plugin.initialize(settings: initSettings);
+      await _plugin.initialize(
+        settings: initSettings,
+        onDidReceiveNotificationResponse: (NotificationResponse response) {
+          final payload = response.payload;
+          if (payload != null && payload.isNotEmpty) {
+            AppRouter.router.push('/reminder/$payload');
+          }
+        },
+      );
 
       // Create/Recreate the channel explicitly with maximum settings
       final androidImplementation = _plugin
@@ -312,6 +321,7 @@ class NotificationServiceImpl implements NotificationService {
         body: body,
         scheduledDate: tzDateTime,
         notificationDetails: details,
+        payload: id.toString(),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       );
 

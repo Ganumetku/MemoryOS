@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:isar/isar.dart';
 
 import '../../../../app/di/service_locator.dart';
 import '../../../../app/theme/app_colors.dart';
-import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../core/parser/parsed_memory.dart';
@@ -121,7 +121,7 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
       ),
       decoration: BoxDecoration(
         color: AppColors.bgDarkSecondary,
-        borderRadius: AppRadius.brTop24,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: SingleChildScrollView(
         child: Column(
@@ -131,11 +131,12 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
             // Drag Handle
             Center(
               child: Container(
-                width: 40,
-                height: 4.5,
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: AppColors.bgDarkTertiary,
-                  borderRadius: AppRadius.brAll8,
+                  color: AppColors.textDarkTertiary.withAlpha(80),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
@@ -519,6 +520,7 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
                 }
 
                 if (saved) {
+                  HapticFeedback.lightImpact();
                   try {
                     sl<AnalyticsService>().incrementCaptureCount('text');
                   } catch (_) {}

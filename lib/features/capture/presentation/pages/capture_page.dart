@@ -114,8 +114,47 @@ class _CapturePageState extends State<CapturePage> {
                           _MediaCaptureButton(
                             icon: Icons.mic_none,
                             label: 'Voice',
-                            onTap: () =>
-                                _showComingSoonToast(context, 'Voice capture'),
+                            onTap: () async {
+                              final result = await context.push<String>('/voice-capture');
+                              if (result != null && result.trim().isNotEmpty) {
+                                setState(() {
+                                  _controller.text = result;
+                                });
+                                if (context.mounted) {
+                                  final captureCubit = context.read<CaptureCubit>();
+                                  MemoryCubit? memoryCubit;
+                                  try {
+                                    memoryCubit = context.read<MemoryCubit>();
+                                  } catch (_) {}
+
+                                  final router = GoRouter.of(context);
+                                  final saved = await showModalBottomSheet<bool>(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    backgroundColor: Colors.transparent,
+                                    builder: (_) {
+                                      return MultiBlocProvider(
+                                        providers: [
+                                          BlocProvider.value(value: captureCubit),
+                                          if (memoryCubit != null)
+                                            BlocProvider.value(value: memoryCubit),
+                                        ],
+                                        child: SmartAnalysisBottomSheet(
+                                          rawContent: result,
+                                        ),
+                                      );
+                                    },
+                                  );
+
+                                  if (saved == true) {
+                                    memoryCubit?.fetchMemories();
+                                    if (mounted) {
+                                      router.pop();
+                                    }
+                                  }
+                                }
+                              }
+                            },
                           ),
                           _MediaCaptureButton(
                             icon: Icons.camera_alt_outlined,

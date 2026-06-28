@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
@@ -8,19 +9,27 @@ import '../../../../app/theme/app_radius.dart';
 import '../../../../app/theme/app_spacing.dart';
 import '../../../../app/theme/app_text_styles.dart';
 import '../../../../shared/widgets/memory_glass_card.dart';
-import '../../../../shared/widgets/memory_loading_indicator.dart';
+import '../../../../shared/widgets/loading_skeletons.dart';
+import '../../../../shared/widgets/memory_primary_button.dart';
+import '../../../../shared/widgets/animated_number.dart';
 import '../../../capture/presentation/bloc/capture_cubit.dart';
 import '../../../capture/presentation/widgets/capture_bottom_sheet.dart';
+import '../../../capture/presentation/widgets/smart_analysis_bottom_sheet.dart';
 import '../../../memories/domain/entities/memory.dart';
 import '../../../memories/presentation/bloc/memory_cubit.dart';
 import '../../../memories/presentation/bloc/memory_state.dart';
 import '../../../memories/presentation/widgets/memory_options_bottom_sheet.dart';
+import '../../../reminder/presentation/pages/reminder_detail_page.dart';
 import '../widgets/life_balance_card.dart';
-import '../../../../core/services/summary_service.dart';
+import '../widgets/timeline_summary_card.dart';
 import '../../../../core/services/insight_service.dart';
 import '../../../../core/services/follow_up_service.dart';
 import '../../../../core/services/home_experience_service.dart';
 import '../../../../core/utils/memory_type_helper.dart';
+import 'dart:async';
+import '../../../../core/services/reminder_status_service.dart';
+import '../../../../core/services/reminder_countdown_service.dart';
+import '../../../../core/services/reminder_stats_service.dart';
 import '../../../memories/data/models/follow_up_model.dart';
 import '../../../memories/data/models/memory_model.dart';
 import 'package:isar/isar.dart';
@@ -48,6 +57,32 @@ class _TimelinePageView extends StatefulWidget {
 }
 
 class _TimelinePageViewState extends State<_TimelinePageView> {
+  Timer? _countdownTimer;
+  bool _showConfetti = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _countdownTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (mounted) {
+        setState(() {});
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _countdownTimer?.cancel();
+    super.dispose();
+  }
+
+  void _triggerConfetti() {
+    HapticFeedback.mediumImpact();
+    setState(() {
+      _showConfetti = true;
+    });
+  }
+
   void _showComingSoonToast(BuildContext context, String feature) {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -75,6 +110,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     Memory memory,
     MemoryCubit cubit,
   ) {
+    HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -89,7 +125,8 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
   }
 
   void _showCaptureSheet(BuildContext context, MemoryCubit cubit) {
-    showModalBottomSheet(
+    HapticFeedback.lightImpact();
+    showModalBottomSheet<dynamic>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
@@ -102,8 +139,31 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
           child: const CaptureBottomSheet(),
         );
       },
-    ).then((_) {
-      cubit.fetchMemories();
+    ).then((voiceTranscript) {
+      if (voiceTranscript is String && voiceTranscript.trim().isNotEmpty) {
+        if (context.mounted) {
+          showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (_) {
+              return MultiBlocProvider(
+                providers: [
+                  BlocProvider(create: (_) => sl<CaptureCubit>()),
+                  BlocProvider.value(value: cubit),
+                ],
+                child: SmartAnalysisBottomSheet(
+                  rawContent: voiceTranscript,
+                ),
+              );
+            },
+          ).then((_) {
+            cubit.fetchMemories();
+          });
+        }
+      } else {
+        cubit.fetchMemories();
+      }
     });
   }
 
@@ -119,7 +179,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
             BlocBuilder<MemoryCubit, MemoryState>(
               builder: (context, state) {
                 if (state is MemoryLoading) {
-                  return const Center(child: MemoryLoadingIndicator());
+                  return const TimelineSkeleton();
                 }
 
                 if (state is MemoryError) {
@@ -247,7 +307,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                         ),
                       ),
 
-                      // 2. Vault Glass Card
+                      // AI Summary Card at the top of the Timeline screen
                       SliverPadding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16.0,
@@ -256,6 +316,20 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                         sliver: SliverToBoxAdapter(
                           child: _EntranceAnimation(
                             index: 0,
+                            child: TimelineSummaryCard(memories: memories),
+                          ),
+                        ),
+                      ),
+
+                      // 2. Vault Glass Card
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0,
+                          vertical: 8.0,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: _EntranceAnimation(
+                            index: 1,
                             child: _buildVaultCard(memories.length),
                           ),
                         ),
@@ -279,11 +353,11 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                           ),
                           sliver: SliverToBoxAdapter(
                             child: _EntranceAnimation(
-                              index: 1,
+                              index: 2,
                               child: AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 300),
                                 child: exp == null
-                                    ? _buildSummaryCard(memories)
+                                    ? const DashboardCardSkeleton()
                                     : _buildExperienceCard(exp, memories),
                               ),
                             ),
@@ -304,6 +378,17 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                           ),
                         ),
 
+                        // 3.4. Periodic Reviews Card
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 8.0,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: _buildPeriodicReviewsCard(context),
+                          ),
+                        ),
+
                         // 3.5. Memory Insights Card
                         SliverPadding(
                           padding: const EdgeInsets.symmetric(
@@ -312,9 +397,20 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                           ),
                           sliver: SliverToBoxAdapter(
                             child: _EntranceAnimation(
-                              index: 3,
+                              index: 4,
                               child: _buildInsightsCard(),
                             ),
+                          ),
+                        ),
+
+                        // 3.6. Reminder Intelligence Dashboard Card
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16.0,
+                            vertical: 8.0,
+                          ),
+                          sliver: SliverToBoxAdapter(
+                            child: _buildReminderStatsCard(memories),
                           ),
                         ),
 
@@ -324,7 +420,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                             padding: const EdgeInsets.symmetric(vertical: 12.0),
                             sliver: SliverToBoxAdapter(
                               child: _EntranceAnimation(
-                                index: 4,
+                                index: 5,
                                 child: _buildPinnedSection(
                                   context,
                                   pinned,
@@ -418,6 +514,18 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                 onCaptureTap: () => _showCaptureSheet(context, memoryCubit),
               ),
             ),
+            if (_showConfetti)
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: ConfettiBurst(
+                    onComplete: () {
+                      setState(() {
+                        _showConfetti = false;
+                      });
+                    },
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -461,11 +569,21 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                     ),
                   ),
                   AppSpacing.v4,
-                  Text(
-                    '$count memories safely stored',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textDarkSecondary,
-                    ),
+                  Row(
+                    children: [
+                      AnimatedNumber(
+                        value: count,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textDarkSecondary,
+                        ),
+                      ),
+                      Text(
+                        ' memories safely stored',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textDarkSecondary,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -483,25 +601,43 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                   color: AppColors.textDarkSecondary,
                 ),
               ),
-              Text(
-                '$count / Unlimited',
-                style: AppTextStyles.labelSmall.copyWith(
-                  color: AppColors.brandPrimary,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  AnimatedNumber(
+                    value: count,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.brandPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Text(
+                    ' / Unlimited',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      color: AppColors.brandPrimary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
           AppSpacing.v8,
           ClipRRect(
             borderRadius: BorderRadius.circular(4),
-            child: LinearProgressIndicator(
-              value: count > 0 ? (count / 100).clamp(0.02, 1.0) : 0.0,
-              backgroundColor: AppColors.bgDarkTertiary,
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                AppColors.brandPrimary,
-              ),
-              minHeight: 6,
+            child: TweenAnimationBuilder<double>(
+              tween: Tween<double>(begin: 0.0, end: count > 0 ? (count / 100.0).clamp(0.02, 1.0) : 0.0),
+              duration: const Duration(milliseconds: 900),
+              curve: Curves.easeOutCubic,
+              builder: (context, value, child) {
+                return LinearProgressIndicator(
+                  value: value,
+                  backgroundColor: AppColors.bgDarkTertiary,
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppColors.brandPrimary,
+                  ),
+                  minHeight: 6,
+                );
+              },
             ),
           ),
         ],
@@ -509,139 +645,111 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     );
   }
 
-  Widget _buildSummaryCard(List<Memory> memories) {
-    return FutureBuilder<DashboardSummary>(
-      future: sl<SummaryService>().getSummary(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: CircularProgressIndicator(color: AppColors.brandPrimary),
-            ),
-          );
-        }
-        if (!snapshot.hasData) {
-          return const SizedBox.shrink();
-        }
 
-        final summary = snapshot.data!;
-        String titleText = 'Daily Briefing';
-        String subtitleText = '';
-        IconData titleIcon = Icons.insights;
-        Color titleColor = AppColors.brandPrimary;
-        
-        List<Widget> summaryItems = [];
 
-        if (summary.todayCaptures == 0) {
-          subtitleText = "Nothing captured today. Capture something worth remembering.";
-          titleColor = AppColors.textDarkSecondary;
-        } else {
-          summaryItems.add(_SummaryBullet('• ${summary.todayCaptures} Memories Captured Today'));
-        }
+  Widget _buildReminderStatsCard(List<Memory> memories) {
+    final stats = ReminderStatsService.calculateStats(memories);
 
-        if (summary.yesterdayCaptures > 0 && summary.todayCaptures == 0) {
-          summaryItems.add(_SummaryBullet('• Yesterday you captured ${summary.yesterdayCaptures} memories'));
-        }
+    String formatDelay(Duration d) {
+      if (d == Duration.zero) return 'On Time';
+      final isEarly = d.isNegative;
+      final absD = d.abs();
+      if (absD.inMinutes < 60) {
+        return '${absD.inMinutes}m ${isEarly ? "early" : "delay"}';
+      }
+      final hours = absD.inHours;
+      final mins = absD.inMinutes % 60;
+      return '${hours}h ${mins}m ${isEarly ? "early" : "delay"}';
+    }
 
-        if (summary.upcomingRemindersToday > 0) {
-          titleText = 'Needs Attention';
-          titleColor = AppColors.brandSecondary;
-          subtitleText = "You have ${summary.upcomingRemindersToday} things waiting for you.";
-          summaryItems.add(_SummaryBullet('• ${summary.upcomingRemindersToday} Upcoming Reminder${summary.upcomingRemindersToday > 1 ? "s" : ""}'));
-        }
-
-        if (summary.missedReminders > 0) {
-          titleText = 'Overdue';
-          titleColor = AppColors.error;
-          subtitleText = "Some things slipped through the cracks.";
-          summaryItems.add(_SummaryBullet('• ${summary.missedReminders} Missed Reminder${summary.missedReminders > 1 ? "s" : ""}'));
-        }
-
-        if (summary.pinnedCount > 0) {
-          summaryItems.add(_SummaryBullet('• ${summary.pinnedCount} Pinned Memor${summary.pinnedCount > 1 ? "ies" : "y"}'));
-        }
-
-        if (summary.currentStreak > 0) {
-          summaryItems.add(_SummaryBullet('• ${summary.currentStreak} Day Capture Streak 🔥'));
-        }
-
-        if (summary.thisWeekCaptures > 0) {
-          summaryItems.add(_SummaryBullet('• ${summary.thisWeekCaptures} Captures This Week'));
-        }
-
-        String lastActivity = "No previous activity";
-        if (summary.lastActivity != null) {
-          final diff = DateTime.now().difference(summary.lastActivity!);
-          if (diff.inMinutes < 1) {
-            lastActivity = "Captured just now";
-          } else if (diff.inHours < 1) {
-            lastActivity = "Captured ${diff.inMinutes}m ago";
-          } else if (diff.inHours < 24) {
-            lastActivity = "Captured ${diff.inHours}h ago";
-          } else {
-            lastActivity = "Captured ${diff.inDays}d ago";
-          }
-        }
-
-        return MemoryGlassCard(
-          padding: AppSpacing.pAll20,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    titleIcon,
-                    size: 16,
-                    color: titleColor,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    titleText,
-                    style: AppTextStyles.titleMedium.copyWith(
-                      color: AppColors.textDarkPrimary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              if (subtitleText.isNotEmpty) ...[
-                AppSpacing.v8,
-                Text(
-                  subtitleText,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: titleColor,
-                    fontWeight: FontWeight.w500,
+    Widget statItem(String label, String value, IconData icon, Color color) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: AppColors.bgDarkTertiary.withAlpha(50),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.glassDarkBorder, width: 1.0),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Icon(icon, size: 16, color: color),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: color,
+                    shape: BoxShape.circle,
                   ),
                 ),
               ],
-              if (summaryItems.isNotEmpty) ...[
-                AppSpacing.v16,
-                ...summaryItems,
-              ],
-              AppSpacing.v12,
-              Row(
-                children: [
-                  const Icon(
-                    Icons.access_time,
-                    size: 12,
-                    color: AppColors.textDarkTertiary,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    lastActivity,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      color: AppColors.textDarkSecondary,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: AppTextStyles.titleMedium.copyWith(
+                color: AppColors.textDarkPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textDarkTertiary,
+                fontSize: 9,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return MemoryGlassCard(
+      padding: AppSpacing.pAll24,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Reminder Intelligence',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Icon(
+                Icons.insights,
+                color: AppColors.brandSecondary,
+                size: 20,
               ),
             ],
           ),
-        );
-      },
+          AppSpacing.v16,
+          GridView.count(
+            crossAxisCount: 3,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 10,
+            crossAxisSpacing: 10,
+            childAspectRatio: 0.9,
+            children: [
+              statItem('Upcoming', '${stats.upcomingCount}', Icons.alarm, AppColors.brandSecondary),
+              statItem('Completed Today', '${stats.completedTodayCount}', Icons.check_circle_outline, AppColors.success),
+              statItem('Missed', '${stats.missedCount}', Icons.error_outline, AppColors.error),
+              statItem('Completion Rate', '${stats.completionRate.toStringAsFixed(1)}%', Icons.percent, Colors.purpleAccent),
+              statItem('Avg Delay', formatDelay(stats.averageCompletionDelay), Icons.timer_outlined, Colors.amber),
+              statItem('Longest Streak', '${stats.longestStreak}d', Icons.local_fire_department_outlined, Colors.orange),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -757,6 +865,9 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     Memory m,
     MemoryCubit cubit,
   ) {
+    final isReminder = m.reminderAt != null;
+    final isCompleted = m.tags.contains('completed_reminder');
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: Dismissible(
@@ -764,12 +875,18 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
         direction: DismissDirection.horizontal,
         confirmDismiss: (direction) async {
           if (direction == DismissDirection.startToEnd) {
-            // Swipe right: Pin/Unpin
-            cubit.togglePin(m);
-            // Snap card back
+            if (isReminder) {
+              if (!isCompleted) {
+                _triggerConfetti();
+              } else {
+                HapticFeedback.lightImpact();
+              }
+              cubit.toggleReminderCompleted(m);
+            } else {
+              cubit.togglePin(m);
+            }
             return false;
           } else {
-            // Swipe left: Delete
             _showDeleteAlert(context, m, cubit);
             return false;
           }
@@ -778,22 +895,31 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
           alignment: Alignment.centerLeft,
           padding: const EdgeInsets.symmetric(horizontal: 20),
           decoration: BoxDecoration(
-            color: AppColors.brandPrimary.withAlpha(40),
+            gradient: LinearGradient(
+              colors: isReminder
+                  ? [AppColors.success.withAlpha(20), AppColors.success.withAlpha(120)]
+                  : [AppColors.brandPrimary.withAlpha(20), AppColors.brandPrimary.withAlpha(120)],
+            ),
             borderRadius: AppRadius.brAll16,
           ),
           child: Icon(
-            m.isPinned ? Icons.pin_end_outlined : Icons.push_pin,
-            color: AppColors.brandPrimary,
+            isReminder
+                ? (isCompleted ? Icons.undo : Icons.check_circle_outline)
+                : (m.isPinned ? Icons.pin_end_outlined : Icons.push_pin),
+            color: isReminder ? AppColors.success : AppColors.brandPrimary,
+            size: 24,
           ),
         ),
         secondaryBackground: Container(
           alignment: Alignment.centerRight,
           padding: const EdgeInsets.symmetric(horizontal: 20),
           decoration: BoxDecoration(
-            color: AppColors.error.withAlpha(40),
+            gradient: LinearGradient(
+              colors: [AppColors.error.withAlpha(20), AppColors.error.withAlpha(120)],
+            ),
             borderRadius: AppRadius.brAll16,
           ),
-          child: const Icon(Icons.delete_outline, color: AppColors.error),
+          child: const Icon(Icons.delete_outline, color: AppColors.error, size: 24),
         ),
         child: GestureDetector(
           onLongPress: () => _showMemoryOptions(context, m, cubit),
@@ -821,7 +947,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
           ),
           const SizedBox(width: 4),
           Text(
-            config.icon == Icons.help_outline ? (type ?? 'Personal') : type ?? 'Personal', // Just in case
+            config.icon == Icons.help_outline ? (type ?? 'Personal') : type ?? 'Personal',
             style: AppTextStyles.labelSmall.copyWith(
               color: config.color,
               fontWeight: FontWeight.bold,
@@ -833,120 +959,169 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     );
   }
 
+  Widget _buildStatusBadge(ReminderStatus status) {
+    Color statusColor;
+    String statusText;
+    if (status == ReminderStatus.completed) {
+      statusColor = AppColors.success;
+      statusText = 'Completed';
+    } else if (status == ReminderStatus.missed) {
+      statusColor = AppColors.error;
+      statusText = 'Missed';
+    } else {
+      statusColor = AppColors.brandSecondary;
+      statusText = 'Upcoming';
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: statusColor.withAlpha(20),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: statusColor.withAlpha(50), width: 1.0),
+      ),
+      child: Text(
+        statusText,
+        style: AppTextStyles.labelSmall.copyWith(
+          color: statusColor,
+          fontWeight: FontWeight.bold,
+          fontSize: 10,
+        ),
+      ),
+    );
+  }
+
   Widget _buildMemoryCard(BuildContext context, Memory m, MemoryCubit cubit) {
+    final isReminder = m.reminderAt != null;
     final typeConfig = MemoryTypeHelper.getConfig(m.type);
+
+    Color accentColor = typeConfig.color;
+    if (isReminder) {
+      final status = ReminderStatusService.getStatus(m);
+      if (status == ReminderStatus.completed) {
+        accentColor = AppColors.success;
+      } else if (status == ReminderStatus.missed) {
+        accentColor = AppColors.error;
+      } else {
+        accentColor = AppColors.brandSecondary;
+      }
+    }
+
     return MemoryGlassCard(
       padding: EdgeInsets.zero,
-      onTap: () =>
-          context.push('/memories/${m.id}').then((_) => cubit.fetchMemories()),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
+      onTap: () {
+        if (isReminder) {
+          context.push('/reminder/${m.id}').then((_) => cubit.fetchMemories());
+        } else {
+          context.push('/memories/${m.id}').then((_) => cubit.fetchMemories());
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(
+              color: accentColor,
               width: 4,
-              decoration: BoxDecoration(
-                color: typeConfig.color,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  bottomLeft: Radius.circular(16),
-                ),
-              ),
             ),
-            Expanded(
-              child: Padding(
-                padding: AppSpacing.pAll16,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            m.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTextStyles.titleMedium.copyWith(
-                              color: AppColors.textDarkPrimary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        AppSpacing.h8,
-                        Text(
-                          _formatTime(m.createdAt),
-                          style: AppTextStyles.labelSmall.copyWith(
-                            color: AppColors.textDarkTertiary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    AppSpacing.v8,
-                    Text(
-                      m.content,
-                      maxLines: 3,
+          ),
+        ),
+        child: Padding(
+          padding: AppSpacing.pAll16,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      m.title,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: AppColors.textDarkSecondary,
+                      style: AppTextStyles.titleMedium.copyWith(
+                        color: AppColors.textDarkPrimary,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                    AppSpacing.v12,
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  ),
+                  AppSpacing.h8,
+                  if (isReminder) ...[
+                    Text(
+                      ReminderCountdownService.getCardCountdown(m),
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: accentColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ] else ...[
+                    Text(
+                      _formatTime(m.createdAt),
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: AppColors.textDarkTertiary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              AppSpacing.v12,
+              Text(
+                m.content,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkSecondary.withAlpha(191),
+                ),
+              ),
+              AppSpacing.v16,
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8.0,
+                      runSpacing: 4.0,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Expanded(
-                          child: Wrap(
-                            spacing: 8.0,
-                            runSpacing: 4.0,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              _buildTypeBadge(m.type),
-                              if (m.tags.isNotEmpty) ...[
-                                ...m.tags
-                                    .where((tag) => tag != m.type)
-                                    .take(2)
-                                    .map(
-                                      (tag) => Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: AppColors.brandPrimary
-                                              .withAlpha(20),
-                                          borderRadius: BorderRadius.circular(
-                                            4,
-                                          ),
-                                        ),
-                                        child: Text(
-                                          tag,
-                                          style: AppTextStyles.labelSmall
-                                              .copyWith(
-                                                color: AppColors.brandPrimary,
-                                                fontSize: 9,
-                                              ),
-                                        ),
-                                      ),
+                        _buildTypeBadge(m.type),
+                        if (isReminder)
+                          _buildStatusBadge(ReminderStatusService.getStatus(m)),
+                        if (m.tags.isNotEmpty) ...[
+                          ...m.tags
+                              .where((tag) => tag != m.type && tag != 'completed_reminder')
+                              .take(2)
+                              .map(
+                                (tag) => Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.brandPrimary.withAlpha(20),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: AppTextStyles.labelSmall.copyWith(
+                                      color: AppColors.brandPrimary,
+                                      fontSize: 9,
                                     ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        if (m.isPinned) ...[
-                          AppSpacing.h8,
-                          const Icon(
-                            Icons.push_pin,
-                            size: 12,
-                            color: AppColors.brandPrimary,
-                          ),
+                                  ),
+                                ),
+                              ),
                         ],
                       ],
                     ),
+                  ),
+                  if (m.isPinned) ...[
+                    AppSpacing.h8,
+                    const Icon(
+                      Icons.push_pin,
+                      size: 12,
+                      color: AppColors.brandPrimary,
+                    ),
                   ],
-                ),
+                ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1025,7 +1200,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
           ),
           AppSpacing.v8,
           Text(
-            'Capture your first memory.',
+            'Capture something worth remembering.',
             style: AppTextStyles.bodyMedium.copyWith(
               color: AppColors.textDarkSecondary,
             ),
@@ -1073,6 +1248,93 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     final hourStr = date.hour.toString().padLeft(2, '0');
     final minStr = date.minute.toString().padLeft(2, '0');
     return '$hourStr:$minStr';
+  }
+
+  String _formatReminderTime(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final reminderDate = DateTime(date.year, date.month, date.day);
+
+    String dateStr;
+    if (reminderDate == today) {
+      dateStr = "Today";
+    } else if (reminderDate == tomorrow) {
+      dateStr = "Tomorrow";
+    } else {
+      final months = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      ];
+      dateStr = "${date.day} ${months[date.month - 1]}";
+    }
+
+    final minStr = date.minute.toString().padLeft(2, '0');
+    final suffix = date.hour >= 12 ? 'PM' : 'AM';
+    final int displayHour = date.hour > 12
+        ? date.hour - 12
+        : (date.hour == 0 ? 12 : date.hour);
+    final timeStr = "$displayHour:$minStr $suffix";
+
+    return "$dateStr • $timeStr";
+  }
+
+  Widget _buildNextReminderRow(MemoryModel? reminder) {
+    if (reminder == null) {
+      return Row(
+        children: [
+          const Icon(Icons.alarm, size: 16, color: AppColors.textDarkTertiary),
+          const SizedBox(width: 8),
+          Text(
+            'Next Reminder: None scheduled',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textDarkSecondary,
+            ),
+          ),
+        ],
+      );
+    }
+
+    final typeConfig = MemoryTypeHelper.getConfig(reminder.type);
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+      child: Container(
+        width: double.infinity,
+        padding: AppSpacing.pAll16,
+        decoration: BoxDecoration(
+          color: AppColors.bgDarkTertiary.withAlpha(80),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Next Reminder",
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textDarkTertiary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              "${typeConfig.emoji} ${reminder.title}",
+              style: AppTextStyles.titleMedium.copyWith(
+                color: AppColors.textDarkPrimary,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _formatReminderTime(reminder.reminderAt!),
+              style: AppTextStyles.bodySmall.copyWith(
+                color: AppColors.textDarkSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildInsightsCard() {
@@ -1131,7 +1393,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
         }
 
         return MemoryGlassCard(
-          padding: AppSpacing.pAll20,
+          padding: AppSpacing.pAll24,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1236,7 +1498,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
 
   Widget _buildFollowUpCard(BuildContext context, FollowUpModel followUp, MemoryCubit cubit) {
     return MemoryGlassCard(
-      padding: AppSpacing.pAll20,
+      padding: AppSpacing.pAll24,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1355,6 +1617,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                       }
 
                       if (context.mounted) {
+                        HapticFeedback.lightImpact();
                         showModalBottomSheet<bool>(
                           context: context,
                           isScrollControlled: true,
@@ -1446,7 +1709,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
 
   Widget _buildMorningFocusCard(HomeExperienceData data) {
     return MemoryGlassCard(
-      padding: AppSpacing.pAll20,
+      padding: AppSpacing.pAll24,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1468,9 +1731,72 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
             ],
           ),
           AppSpacing.v16,
-          _buildDetailRow(Icons.alarm, '${data.todayRemindersCount} reminders scheduled today'),
+          Row(
+            children: [
+              Icon(Icons.notifications_active_outlined, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.todayRemindersCount,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' reminders scheduled today',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
           AppSpacing.v8,
-          _buildDetailRow(Icons.rate_review_outlined, '${data.upcomingFollowUpsCount} pending follow-ups today'),
+          _buildNextReminderRow(data.firstUpcomingReminder),
+          AppSpacing.v8,
+          Row(
+            children: [
+              Icon(Icons.history, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.yesterdayMemoriesCount,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' memories captured yesterday',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
+          AppSpacing.v8,
+          Row(
+            children: [
+              Icon(Icons.local_fire_department_outlined, size: 16, color: Colors.orange),
+              const SizedBox(width: 8),
+              Text(
+                'Current capture streak: ',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              AnimatedNumber(
+                value: data.currentStreak,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                ' day${data.currentStreak == 1 ? "" : "s"} 🔥',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
           AppSpacing.v16,
           const Divider(color: AppColors.bgDarkTertiary),
           AppSpacing.v8,
@@ -1488,7 +1814,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
 
   Widget _buildAfternoonProgressCard(HomeExperienceData data) {
     return MemoryGlassCard(
-      padding: AppSpacing.pAll20,
+      padding: AppSpacing.pAll24,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1510,9 +1836,43 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
             ],
           ),
           AppSpacing.v16,
-          _buildDetailRow(Icons.edit_note, '${data.todayCapturesCount} memories captured today'),
+          Row(
+            children: [
+              Icon(Icons.edit_note, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.todayCapturesCount,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' memories captured today',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
           AppSpacing.v8,
-          _buildDetailRow(Icons.check_circle_outline, '${data.completedRemindersCount} reminders completed today'),
+          Row(
+            children: [
+              Icon(Icons.check_circle_outline, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.completedRemindersCount,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' reminders completed today',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1520,7 +1880,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
 
   Widget _buildEveningReflectionCard(HomeExperienceData data) {
     return MemoryGlassCard(
-      padding: AppSpacing.pAll20,
+      padding: AppSpacing.pAll24,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1542,9 +1902,43 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
             ],
           ),
           AppSpacing.v16,
-          _buildDetailRow(Icons.history, '${data.todayMemories.length} memories captured today'),
+          Row(
+            children: [
+              Icon(Icons.history, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.todayMemories.length,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' memories captured today',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
           AppSpacing.v8,
-          _buildDetailRow(Icons.hub_outlined, '${data.connectionsCreatedCount} connections formed today'),
+          Row(
+            children: [
+              Icon(Icons.hub_outlined, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.connectionsCreatedCount,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' connections formed today',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1552,7 +1946,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
 
   Widget _buildNightReflectionCard(HomeExperienceData data) {
     return MemoryGlassCard(
-      padding: AppSpacing.pAll20,
+      padding: AppSpacing.pAll24,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1560,7 +1954,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Day Completed',
+                'Nightly Reflection',
                 style: AppTextStyles.titleMedium.copyWith(
                   color: AppColors.textDarkPrimary,
                   fontWeight: FontWeight.bold,
@@ -1574,55 +1968,181 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
             ],
           ),
           AppSpacing.v16,
-          _buildDetailRow(Icons.task_alt, '${data.completedTodayCount} tasks/reminders completed today'),
+          Row(
+            children: [
+              Icon(Icons.note_alt_outlined, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.todayCapturesCount,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' memories captured today',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
           AppSpacing.v8,
-          _buildDetailRow(Icons.next_plan_outlined, '${data.tomorrowRemindersCount} upcoming reminders tomorrow'),
+          Row(
+            children: [
+              Icon(Icons.lightbulb_outline, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.ideasCapturedCount,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' ideas captured today',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
+          AppSpacing.v8,
+          Row(
+            children: [
+              Icon(Icons.task_alt, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.completedRemindersCount,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' reminders completed today',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
+          AppSpacing.v8,
+          Row(
+            children: [
+              Icon(Icons.warning_amber_outlined, size: 16, color: data.accentColor),
+              const SizedBox(width: 8),
+              AnimatedNumber(
+                value: data.missedRemindersCount,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+              Text(
+                ' reminders missed today',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                ),
+              ),
+            ],
+          ),
+          AppSpacing.v16,
+          const Divider(color: AppColors.bgDarkTertiary),
+          AppSpacing.v16,
+          SizedBox(
+            width: double.infinity,
+            child: MemoryPrimaryButton(
+              text: "Reflect Now",
+              icon: Icons.psychology_outlined,
+              onPressed: () => context.push('/reflection'),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDetailRow(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(
-          icon,
-          size: 16,
-          color: AppColors.textDarkTertiary,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            text,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textDarkSecondary,
-            ),
+  Widget _buildPeriodicReviewsCard(BuildContext context) {
+    return MemoryGlassCard(
+      padding: AppSpacing.pAll24,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Periodic Reviews',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const Icon(
+                Icons.analytics_outlined,
+                color: AppColors.brandPrimary,
+                size: 20,
+              ),
+            ],
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SummaryBullet extends StatelessWidget {
-  final String text;
-
-  const _SummaryBullet(this.text);
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6.0),
-      child: Text(
-        text,
-        style: AppTextStyles.bodyMedium.copyWith(
-          color: AppColors.textDarkSecondary,
-          fontWeight: FontWeight.w500,
-        ),
+          AppSpacing.v16,
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.brandPrimary.withAlpha(20),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.date_range_outlined, color: AppColors.brandPrimary, size: 20),
+            ),
+            title: Text(
+              'Weekly Review',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textDarkPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            subtitle: Text(
+              '7-day captures, keywords, and completion rate',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textDarkSecondary,
+              ),
+            ),
+            trailing: const Icon(Icons.chevron_right, color: AppColors.textDarkTertiary),
+            onTap: () => context.push('/weekly-review'),
+          ),
+          const Divider(color: AppColors.bgDarkTertiary),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.brandSecondary.withAlpha(20),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.calendar_month_outlined, color: AppColors.brandSecondary, size: 20),
+            ),
+            title: Text(
+              'Monthly Review',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textDarkPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            subtitle: Text(
+              '30-day captures, active category, and contact counts',
+              style: AppTextStyles.labelSmall.copyWith(
+                color: AppColors.textDarkSecondary,
+              ),
+            ),
+            trailing: const Icon(Icons.chevron_right, color: AppColors.textDarkTertiary),
+            onTap: () => context.push('/monthly-review'),
+          ),
+        ],
       ),
     );
   }
 }
+
+
 
 /// Custom animated rotating lock icon to make the dashboard feel alive.
 class _AnimatedVaultIcon extends StatefulWidget {
@@ -1701,7 +2221,7 @@ class _EntranceAnimation extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 400 + (index * 120).clamp(0, 400)),
+      duration: const Duration(milliseconds: 250),
       curve: Curves.easeOutCubic,
       builder: (context, value, child) {
         return Opacity(
@@ -1749,7 +2269,7 @@ class _FloatingBottomBarState extends State<_FloatingBottomBar>
     );
     _scaleAnimation = Tween<double>(
       begin: 1.0,
-      end: 1.12,
+      end: 0.92,
     ).animate(CurvedAnimation(parent: _pulseController, curve: Curves.easeOut));
   }
 
@@ -1788,30 +2308,35 @@ class _FloatingBottomBarState extends State<_FloatingBottomBar>
               // Timeline Tab
               GestureDetector(
                 onTap: widget.onTimelineTap,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      widget.currentIndex == 0
-                          ? Icons.dashboard
-                          : Icons.dashboard_outlined,
-                      color: widget.currentIndex == 0
-                          ? AppColors.textDarkPrimary
-                          : AppColors.textDarkTertiary,
-                      size: 22,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Timeline',
-                      style: AppTextStyles.labelSmall.copyWith(
+                child: Container(
+                  width: 64,
+                  height: 56,
+                  color: Colors.transparent,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        widget.currentIndex == 0
+                            ? Icons.dashboard
+                            : Icons.dashboard_outlined,
                         color: widget.currentIndex == 0
                             ? AppColors.textDarkPrimary
                             : AppColors.textDarkTertiary,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                        size: 22,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'Timeline',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: widget.currentIndex == 0
+                              ? AppColors.textDarkPrimary
+                              : AppColors.textDarkTertiary,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
@@ -1821,30 +2346,35 @@ class _FloatingBottomBarState extends State<_FloatingBottomBar>
               // Recall Tab
               GestureDetector(
                 onTap: widget.onRecallTap,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      widget.currentIndex == 2
-                          ? Icons.psychology
-                          : Icons.psychology_outlined,
-                      color: widget.currentIndex == 2
-                          ? AppColors.textDarkPrimary
-                          : AppColors.textDarkTertiary,
-                      size: 22,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Recall',
-                      style: AppTextStyles.labelSmall.copyWith(
+                child: Container(
+                  width: 64,
+                  height: 56,
+                  color: Colors.transparent,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        widget.currentIndex == 2
+                            ? Icons.psychology
+                            : Icons.psychology_outlined,
                         color: widget.currentIndex == 2
                             ? AppColors.textDarkPrimary
                             : AppColors.textDarkTertiary,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
+                        size: 22,
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 4),
+                      Text(
+                        'Recall',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: widget.currentIndex == 2
+                              ? AppColors.textDarkPrimary
+                              : AppColors.textDarkTertiary,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -1861,6 +2391,7 @@ class _FloatingBottomBarState extends State<_FloatingBottomBar>
                 scale: _scaleAnimation,
                 child: GestureDetector(
                   onTapDown: (_) {
+                    HapticFeedback.lightImpact();
                     _pulseController.forward();
                   },
                   onTapUp: (_) {

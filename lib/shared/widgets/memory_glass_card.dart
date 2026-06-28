@@ -30,7 +30,7 @@ class MemoryGlassCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final ext = theme.extension<AppThemeExtension>();
-    final cardRadius = borderRadius ?? AppRadius.brAll16;
+    final cardRadius = borderRadius ?? AppRadius.brAll24;
 
     // Glass properties derived from theme extension
     final glassColor = ext?.glassSurface ?? Colors.white.withAlpha(13);

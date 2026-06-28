@@ -8,13 +8,28 @@ void main() {
       expect(period, TimePeriod.morning);
     });
 
+    test('Hour 11 is Morning', () {
+      final period = _getPeriodForHour(11);
+      expect(period, TimePeriod.morning);
+    });
+
     test('Hour 12 is Afternoon', () {
       final period = _getPeriodForHour(12);
       expect(period, TimePeriod.afternoon);
     });
 
+    test('Hour 16 is Afternoon', () {
+      final period = _getPeriodForHour(16);
+      expect(period, TimePeriod.afternoon);
+    });
+
     test('Hour 18 is Evening', () {
       final period = _getPeriodForHour(18);
+      expect(period, TimePeriod.evening);
+    });
+
+    test('Hour 20 is Evening', () {
+      final period = _getPeriodForHour(20);
       expect(period, TimePeriod.evening);
     });
 
@@ -31,9 +46,9 @@ void main() {
 }
 
 TimePeriod _getPeriodForHour(int hour) {
-  if (hour >= 5 && hour < 11) {
+  if (hour >= 5 && hour < 12) {
     return TimePeriod.morning;
-  } else if (hour >= 11 && hour < 17) {
+  } else if (hour >= 12 && hour < 17) {
     return TimePeriod.afternoon;
   } else if (hour >= 17 && hour < 21) {
     return TimePeriod.evening;

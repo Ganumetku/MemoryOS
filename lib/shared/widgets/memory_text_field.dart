@@ -14,6 +14,7 @@ class MemoryTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
   final void Function(String)? onChanged;
+  final FocusNode? focusNode;
 
   const MemoryTextField({
     super.key,
@@ -24,6 +25,7 @@ class MemoryTextField extends StatelessWidget {
     this.obscureText = false,
     this.maxLines = 1,
     this.keyboardType,
+    this.focusNode,
     this.validator,
     this.onChanged,
   });
@@ -37,6 +39,7 @@ class MemoryTextField extends StatelessWidget {
       obscureText: obscureText,
       maxLines: maxLines,
       keyboardType: keyboardType,
+      focusNode: focusNode,
       validator: validator,
       onChanged: onChanged,
       style: AppTextStyles.bodyLarge.copyWith(

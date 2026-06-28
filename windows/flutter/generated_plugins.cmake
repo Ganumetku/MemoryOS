@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   flutter_timezone
   isar_flutter_libs
   passkeys_windows
+  speech_to_text_windows
   url_launcher_windows
 )
 
