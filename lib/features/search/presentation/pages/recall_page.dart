@@ -25,6 +25,7 @@ import '../../../../core/utils/memory_type_helper.dart';
 import '../../../../core/services/life_area_service.dart';
 import '../../../../core/services/recall_engine_service.dart';
 import '../../../../core/services/memory_brain_service.dart';
+import '../../../../core/services/synonym_dictionary.dart';
 import '../../domain/repositories/search_history_repository.dart';
 import '../widgets/highlighted_text.dart';
 import '../widgets/memory_search_stats.dart';
@@ -161,11 +162,6 @@ class _RecallPageState extends State<RecallPage> {
       return;
     }
 
-    setState(() {
-      _isSearching = true;
-      _loadingMessage = _loadingMessages[DateTime.now().millisecond % _loadingMessages.length];
-    });
-
     List<Memory> latestMemories = fallbackMemories;
     try {
       final getMemoriesRes = await sl<GetMemoriesUseCase>()(NoParams());
@@ -181,23 +177,28 @@ class _RecallPageState extends State<RecallPage> {
       debugPrint('[RecallPage] Exception fetching database memories: $e');
     }
 
-    // Save to history repository
-    await sl<SearchHistoryRepository>().saveSearch(queryText);
-    _loadHistory();
+    final hasCachedResult = sl<MemoryBrainService>().hasCache(queryText, latestMemories.length);
+    if (!hasCachedResult && !forceImmediate) {
+      setState(() {
+        _isSearching = true;
+        _loadingMessage = _loadingMessages[DateTime.now().millisecond % _loadingMessages.length];
+      });
+    }
 
-    final stopwatch = Stopwatch()..start();
+    // Save to history repository if it contains meaningful keywords (EPIC 21 Task 5)
+    final cleanQueryText = queryText.toLowerCase().trim();
+    final tokens = cleanQueryText.split(RegExp(r'\s+')).where((t) => t.isNotEmpty);
+    final nonFillerTokens = tokens.where((t) => !QueryNormalizer.fillerWords.contains(t));
+    if (nonFillerTokens.isNotEmpty && cleanQueryText.length > 2) {
+      await sl<SearchHistoryRepository>().saveSearch(queryText);
+      _loadHistory();
+    }
 
     // Call MemoryBrainService to process intent and generate conversational answer
     final result = await sl<MemoryBrainService>().process(
       query: queryText,
       memories: latestMemories,
     );
-
-    final elapsed = stopwatch.elapsedMilliseconds;
-    final remainingDelay = forceImmediate ? 0 : (500 - elapsed);
-    if (remainingDelay > 0) {
-      await Future.delayed(Duration(milliseconds: remainingDelay));
-    }
 
     if (mounted) {
       setState(() {
@@ -605,6 +606,7 @@ class _RecallPageState extends State<RecallPage> {
                                 contentWidget = _buildEmptyStateWidget(memories);
                               } else {
                                 contentWidget = SingleChildScrollView(
+                                  padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 96),
                                   key: ValueKey('results_found_${_query}_${filtered.length}'),
                                   physics: const BouncingScrollPhysics(),
                                   child: Column(
@@ -1136,7 +1138,7 @@ class _RecallPageState extends State<RecallPage> {
             ),
             AppSpacing.v16,
             Text(
-              "I couldn't remember anything about \"$_query\" yet.",
+              "I couldn't find anything related to \"$_query\".",
               style: AppTextStyles.bodyLarge.copyWith(
                 color: AppColors.textDarkSecondary,
                 fontWeight: FontWeight.w500,
@@ -1145,35 +1147,25 @@ class _RecallPageState extends State<RecallPage> {
             ),
             AppSpacing.v24,
             if (suggestions.isNotEmpty) ...[
+              Text(
+                'You can try searching:',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.textDarkTertiary,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              AppSpacing.v12,
               Wrap(
                 alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  Text(
-                    'Try: ',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textDarkTertiary,
+                  for (final sugg in suggestions)
+                    SearchSuggestionChip(
+                      label: sugg,
+                      onTap: () => _runSearchImmediately(sugg),
                     ),
-                  ),
-                  for (int i = 0; i < suggestions.length; i++) ...[
-                    GestureDetector(
-                      onTap: () => _runSearchImmediately(suggestions[i]),
-                      child: Text(
-                        suggestions[i],
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.brandPrimary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    if (i < suggestions.length - 1)
-                      Text(
-                        ', ',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.textDarkTertiary,
-                        ),
-                      ),
-                  ],
                 ],
               ),
             ],
@@ -1184,32 +1176,17 @@ class _RecallPageState extends State<RecallPage> {
   }
 
   List<String> _getEmptyStateSuggestions(List<Memory> allMemories) {
-    final suggestions = <String>{};
-    for (final m in allMemories) {
-      suggestions.addAll(m.tags.map((t) => t.toLowerCase()));
-      suggestions.add(m.type.toLowerCase());
-    }
-    final cleanQuery = _query.trim().toLowerCase();
-    suggestions.removeWhere((s) => s.isEmpty || 
-        QueryNormalizer.fillerWords.contains(s) || 
-        s == cleanQuery);
-
-    final list = suggestions.toList();
-    list.sort();
-    
-    final fallbacks = ['appointment', 'hospital', 'medicine', 'health', 'work', 'ideas'];
-    for (final fb in fallbacks) {
-      if (list.length >= 4) break;
-      if (fb != cleanQuery && !list.contains(fb)) {
-        list.add(fb);
-      }
-    }
-
-    return list.take(4).toList();
+    return const ['Work', 'Ideas', 'Shopping', 'Doctor', 'Meeting'];
   }
 
   Widget _buildRelatedSearchSection(List<Memory> results) {
     final related = <String>{};
+    
+    // Add dynamic synonym suggestions
+    final cleanQuery = _query.toLowerCase().trim();
+    final synonyms = SynonymDictionary.getSynonyms(cleanQuery);
+    related.addAll(synonyms);
+
     for (final m in results) {
       related.addAll(m.tags.map((t) => t.toLowerCase().trim()));
       related.add(m.type.toLowerCase().trim());
@@ -1217,13 +1194,17 @@ class _RecallPageState extends State<RecallPage> {
       related.addAll(titleWords);
     }
     
-    final cleanQuery = _query.toLowerCase().trim();
+    final regex = RegExp(r'^[a-zA-Z]+$');
     related.removeWhere((w) => w.isEmpty || 
         QueryNormalizer.fillerWords.contains(w) || 
         w == cleanQuery || 
-        w == 'completed_reminder');
+        w == 'completed_reminder' ||
+        !regex.hasMatch(w));
 
-    final list = related.toList();
+    final list = related.map((w) {
+      if (w.isEmpty) return w;
+      return w[0].toUpperCase() + w.substring(1);
+    }).toSet().toList();
     list.sort();
 
     if (list.isEmpty) return const SizedBox.shrink();

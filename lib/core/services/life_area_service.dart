@@ -5,7 +5,7 @@ import 'life_area_analytics_service.dart';
 /// Central service for Life Areas, delegating to parser and analytics services.
 class LifeAreaService {
   final LifeAreaParser _parser;
-  final LifeAreaAnalyticsService _analyticsService;
+  final LifeAreaAnalyticsService? _analyticsService;
 
   LifeAreaService(this._parser, this._analyticsService);
 
@@ -22,11 +22,11 @@ class LifeAreaService {
 
   /// Delegates to analytics service
   Future<Map<String, double>> getLifeBalance() {
-    return _analyticsService.getLifeBalance();
+    return _analyticsService?.getLifeBalance() ?? Future.value({});
   }
 
   /// Delegates to analytics service
   Future<Map<String, String>> getLifeAreaInsights() {
-    return _analyticsService.getLifeAreaInsights();
+    return _analyticsService?.getLifeAreaInsights() ?? Future.value({});
   }
 }

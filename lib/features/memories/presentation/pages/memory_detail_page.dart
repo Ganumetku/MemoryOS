@@ -14,9 +14,10 @@ import '../../domain/entities/memory.dart';
 import '../bloc/memory_cubit.dart';
 import '../bloc/memory_state.dart';
 import '../../../../core/utils/memory_type_helper.dart';
-import '../../../../core/services/memory_connection_service.dart';
 import '../../../../core/services/analytics_service.dart';
 import '../../../../core/services/life_area_service.dart';
+import '../../../../core/services/memory_graph_service.dart';
+import '../../../../core/services/journey_detector.dart';
 
 /// Screen representing the detailed visualization of a stored Memory fragment.
 /// Integrates App Bar actions (Edit content, Toggle Pin, Delete) and showcases metadata logs.
@@ -47,7 +48,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
     final List<String> lifeAreas = sl<LifeAreaService>().areas;
     String selectedLifeArea = lifeAreas.firstWhere(
       (a) => a.toLowerCase() == memory.type.toLowerCase().trim(),
-      orElse: () => 'Other',
+      orElse: () => 'Daily Life',
     );
 
     showDialog(
@@ -489,6 +490,39 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                             ),
                             AppSpacing.v40,
 
+                            // Journey banner if detected
+                            Builder(
+                              builder: (context) {
+                                final journeyName = JourneyDetector.detectJourney(m, memories);
+                                if (journeyName == null) return const SizedBox.shrink();
+                                return Padding(
+                                  padding: const EdgeInsets.only(bottom: 24.0),
+                                  child: MemoryGlassCard(
+                                    padding: AppSpacing.pAll16,
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.auto_awesome,
+                                          color: AppColors.brandPrimary,
+                                          size: 20,
+                                        ),
+                                        AppSpacing.h12,
+                                        Expanded(
+                                          child: Text(
+                                            'This may be part of your $journeyName Journey.',
+                                            style: AppTextStyles.bodyMedium.copyWith(
+                                              color: AppColors.textDarkPrimary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+
                             // Attributes Section Header
                             Text(
                               'ATTRIBUTES',
@@ -547,7 +581,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                             ),
                             AppSpacing.v16,
 
-                            _buildRelatedMemoriesSection(context, m),
+                            _buildRelatedMemoriesSection(context, m, memories),
                           ],
                         ),
                       ),
@@ -622,75 +656,75 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
         ),
       ],
     );
-  }
+  }  Widget _buildRelatedMemoriesSection(BuildContext context, Memory targetMemory, List<Memory> allMemories) {
+    final connections = sl<MemoryGraphService>().getConnections(targetMemory, allMemories);
 
-  Widget _buildRelatedMemoriesSection(BuildContext context, Memory memory) {
-    return FutureBuilder<List<RelatedMemory>>(
-      future: sl<MemoryConnectionService>().getRelatedMemories(memory),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(20.0),
-              child: CircularProgressIndicator(color: AppColors.brandPrimary),
+    if (connections.isEmpty) {
+      return MemoryGlassCard(
+        padding: AppSpacing.pAll24,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.psychology_outlined,
+              size: 40,
+              color: AppColors.textDarkTertiary,
             ),
-          );
-        }
-
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-          return MemoryGlassCard(
-            padding: AppSpacing.pAll24,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.psychology_outlined,
-                  size: 40,
-                  color: AppColors.textDarkTertiary,
-                ),
-                AppSpacing.v12,
-                Text(
-                  'No connected memories yet.',
-                  style: AppTextStyles.titleMedium.copyWith(
-                    color: AppColors.textDarkPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                AppSpacing.v8,
-                Text(
-                  'Keep capturing, I’ll connect them.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    color: AppColors.textDarkSecondary,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+            AppSpacing.v12,
+            Text(
+              'No connected memories yet.',
+              style: AppTextStyles.titleMedium.copyWith(
+                color: AppColors.textDarkPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+              textAlign: TextAlign.center,
             ),
-          );
-        }
+            AppSpacing.v8,
+            Text(
+              'Keep capturing, I’ll connect them.',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textDarkSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
 
-        final related = snapshot.data!;
-        
-        return Column(
-          children: related.map((r) => _buildRelatedMemoryCard(context, r)).toList(),
-        );
-      },
+    return Column(
+      children: connections.map((conn) => _buildRelatedMemoryCard(context, conn)).toList(),
     );
   }
 
-  Widget _buildRelatedMemoryCard(BuildContext context, RelatedMemory relatedMemory) {
-    final typeConfig = MemoryTypeHelper.getConfig(relatedMemory.memory.type);
-    
+  Widget _buildRelatedMemoryCard(BuildContext context, MemoryConnection conn) {
+    final cand = conn.connectedMemory;
+    final typeConfig = MemoryTypeHelper.getConfig(cand.type);
+
+    final String strengthText;
+    final Color strengthColor;
+    switch (conn.strength) {
+      case ConnectionStrength.strong:
+        strengthText = 'Strong Connection';
+        strengthColor = AppColors.brandPrimary;
+        break;
+      case ConnectionStrength.related:
+        strengthText = 'Related';
+        strengthColor = AppColors.brandSecondary;
+        break;
+      case ConnectionStrength.lightlyRelated:
+        strengthText = 'Lightly Related';
+        strengthColor = AppColors.textDarkTertiary;
+        break;
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: MemoryGlassCard(
         padding: EdgeInsets.zero,
         onTap: () {
-          // Push a new memory detail page
           final memoryCubit = context.read<MemoryCubit>();
-          context.push('/memories/${relatedMemory.memory.id}').then((_) {
-            // refresh this page when returning, if necessary
+          context.push('/memories/${cand.id}').then((_) {
             if (mounted) {
               memoryCubit.fetchMemories();
             }
@@ -727,7 +761,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              relatedMemory.memory.title,
+                              cand.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: AppTextStyles.titleMedium.copyWith(
@@ -737,30 +771,39 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                             ),
                           ),
                           AppSpacing.h8,
-                          Text(
-                            '${relatedMemory.similarityPercentage}% match',
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.textDarkTertiary,
-                              fontWeight: FontWeight.w600,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: strengthColor.withAlpha(20),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: strengthColor.withAlpha(50), width: 1.0),
+                            ),
+                            child: Text(
+                              strengthText,
+                              style: AppTextStyles.labelSmall.copyWith(
+                                color: strengthColor,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 9,
+                              ),
                             ),
                           ),
                         ],
                       ),
                       AppSpacing.v8,
                       Text(
-                        relatedMemory.memory.content,
+                        cand.content,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.bodySmall.copyWith(
                           color: AppColors.textDarkSecondary,
                         ),
                       ),
-                      if (relatedMemory.reasons.isNotEmpty) ...[
+                      if (conn.reasons.isNotEmpty) ...[
                         AppSpacing.v8,
                         Wrap(
                           spacing: 6,
                           runSpacing: 4,
-                          children: relatedMemory.reasons.map((reason) {
+                          children: conn.reasons.map((reason) {
                             return Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 6,
@@ -771,7 +814,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                reason,
+                                reason.text,
                                 style: AppTextStyles.labelSmall.copyWith(
                                   color: AppColors.brandPrimary.withAlpha(200),
                                   fontSize: 9,
@@ -792,7 +835,7 @@ class _MemoryDetailPageState extends State<MemoryDetailPage> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            _formatDateTime(relatedMemory.memory.createdAt),
+                            _formatDateTime(cand.createdAt),
                             style: AppTextStyles.labelSmall.copyWith(
                               color: AppColors.textDarkTertiary,
                               fontSize: 10,

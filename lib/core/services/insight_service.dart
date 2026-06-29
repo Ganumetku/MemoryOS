@@ -242,7 +242,7 @@ class InsightService {
         final neglected = areaInsights['neglected'];
         final growing = areaInsights['growing'];
 
-        if (mostActive != null && mostActive != 'Other') {
+        if (mostActive != null && mostActive != 'Daily Life') {
           pool.add(AppInsight(
             icon: Icons.star_outline,
             headline: "Most Active: $mostActive",
@@ -250,7 +250,7 @@ class InsightService {
           ));
         }
 
-        if (leastActive != null && leastActive != 'None' && leastActive != 'Other') {
+        if (leastActive != null && leastActive != 'None' && leastActive != 'Daily Life') {
           pool.add(AppInsight(
             icon: Icons.trending_flat,
             headline: "Least Active: $leastActive",

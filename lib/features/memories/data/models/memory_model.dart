@@ -30,7 +30,7 @@ class MemoryModel {
       id: id,
       title: title,
       content: content,
-      type: type,
+      type: type == 'Other' ? 'Daily Life' : type,
       createdAt: createdAt,
       updatedAt: updatedAt,
       tags: tags,
@@ -39,12 +39,11 @@ class MemoryModel {
     );
   }
 
-  /// Converts domain [Memory] entity to local [MemoryModel] database model.
   static MemoryModel fromEntity(Memory memory) {
     final model = MemoryModel()
       ..title = memory.title
       ..content = memory.content
-      ..type = memory.type
+      ..type = memory.type == 'Other' ? 'Daily Life' : memory.type
       ..createdAt = memory.createdAt
       ..updatedAt = memory.updatedAt
       ..tags = memory.tags

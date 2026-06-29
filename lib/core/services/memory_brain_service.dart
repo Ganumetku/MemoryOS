@@ -40,6 +40,12 @@ class MemoryBrainService {
     _cache.clear();
   }
 
+  /// Synchronously checks if a query result is already in the cache.
+  bool hasCache(String query, int memoriesLength) {
+    final cacheKey = "${query.trim().toLowerCase()}_$memoriesLength";
+    return _cache.containsKey(cacheKey);
+  }
+
   Future<MemoryBrainResult> process({
     required String query,
     required List<Memory> memories,

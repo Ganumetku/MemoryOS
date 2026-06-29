@@ -262,6 +262,10 @@ class NotificationServiceImpl implements NotificationService {
     required String body,
     required DateTime scheduledDate,
   }) async {
+    final cleaned = _cleanNotificationText(title, body);
+    final cleanTitle = cleaned['title']!;
+    final cleanBody = cleaned['body']!;
+
     _lastScheduledId = id;
     _lastScheduledTime = scheduledDate;
     _isPrimaryScheduled = true;
@@ -317,8 +321,8 @@ class NotificationServiceImpl implements NotificationService {
 
       await _plugin.zonedSchedule(
         id: id,
-        title: title,
-        body: body,
+        title: cleanTitle,
+        body: cleanBody,
         scheduledDate: tzDateTime,
         notificationDetails: details,
         payload: id.toString(),
@@ -466,5 +470,35 @@ class NotificationServiceImpl implements NotificationService {
       // ignore: avoid_print
       print(message);
     }
+  }
+
+  Map<String, String> _cleanNotificationText(String rawTitle, String rawBody) {
+    String cleanText = rawBody.trim();
+    final prefixRegex = RegExp(
+      r'^(please\s+)?(remind\s+me\s+to\s+|remind\s+me\s+|remind\s+)',
+      caseSensitive: false,
+    );
+    if (prefixRegex.hasMatch(cleanText)) {
+      cleanText = cleanText.replaceFirst(prefixRegex, '').trim();
+    }
+    
+    // Capitalize first letter of each word for clean title
+    String titleText = 'Reminder';
+    if (cleanText.isNotEmpty) {
+      titleText = cleanText.split(' ').map((w) {
+        if (w.isEmpty) return '';
+        return w[0].toUpperCase() + w.substring(1).toLowerCase();
+      }).join(' ');
+    }
+    
+    // Body text: "It's time to [lowercase action]."
+    final String bodyText = cleanText.isNotEmpty 
+        ? "It's time to ${cleanText.toLowerCase()}."
+        : "It's time for your scheduled reminder.";
+
+    return {
+      'title': titleText,
+      'body': bodyText,
+    };
   }
 }

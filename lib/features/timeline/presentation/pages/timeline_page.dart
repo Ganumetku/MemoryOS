@@ -22,10 +22,14 @@ import '../../../memories/presentation/widgets/memory_options_bottom_sheet.dart'
 import '../../../reminder/presentation/pages/reminder_detail_page.dart';
 import '../widgets/life_balance_card.dart';
 import '../widgets/timeline_summary_card.dart';
-import '../../../../core/services/insight_service.dart';
+import '../../../../core/services/memory_graph_service.dart';
 import '../../../../core/services/follow_up_service.dart';
 import '../../../../core/services/home_experience_service.dart';
 import '../../../../core/utils/memory_type_helper.dart';
+import '../../../../core/services/life_insights_service.dart';
+import '../../../../core/services/productivity_engine.dart';
+import '../../../../core/services/insight_text_generator.dart';
+import '../../../../core/models/life_insights.dart';
 import 'dart:async';
 import '../../../../core/services/reminder_status_service.dart';
 import '../../../../core/services/reminder_countdown_service.dart';
@@ -124,7 +128,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     );
   }
 
-  void _showCaptureSheet(BuildContext context, MemoryCubit cubit) {
+  void _showCaptureSheet(BuildContext context, MemoryCubit cubit, {String? prefilledText}) {
     HapticFeedback.lightImpact();
     showModalBottomSheet<dynamic>(
       context: context,
@@ -136,7 +140,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
             BlocProvider.value(value: cubit),
             BlocProvider(create: (_) => sl<CaptureCubit>()),
           ],
-          child: const CaptureBottomSheet(),
+          child: CaptureBottomSheet(prefilledText: prefilledText),
         );
       },
     ).then((voiceTranscript) {
@@ -450,6 +454,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                                     context,
                                     m,
                                     memoryCubit,
+                                    memories,
                                   ),
                                 ),
                                 AppSpacing.v16,
@@ -466,6 +471,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                                     context,
                                     m,
                                     memoryCubit,
+                                    memories,
                                   ),
                                 ),
                                 AppSpacing.v16,
@@ -482,6 +488,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                                     context,
                                     m,
                                     memoryCubit,
+                                    memories,
                                   ),
                                 ),
                                 AppSpacing.v16,
@@ -864,6 +871,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     BuildContext context,
     Memory m,
     MemoryCubit cubit,
+    List<Memory> allMemories,
   ) {
     final isReminder = m.reminderAt != null;
     final isCompleted = m.tags.contains('completed_reminder');
@@ -923,7 +931,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
         ),
         child: GestureDetector(
           onLongPress: () => _showMemoryOptions(context, m, cubit),
-          child: _buildMemoryCard(context, m, cubit),
+          child: _buildMemoryCard(context, m, cubit, allMemories),
         ),
       ),
     );
@@ -990,7 +998,78 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
     );
   }
 
-  Widget _buildMemoryCard(BuildContext context, Memory m, MemoryCubit cubit) {
+  void _showConnectedMemoriesSheet(
+    BuildContext context,
+    Memory target,
+    List<MemoryConnection> connections,
+    MemoryCubit cubit,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: AppColors.bgDarkSecondary,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
+      ),
+      builder: (sheetCtx) {
+        return Container(
+          padding: AppSpacing.pAll24,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Connected Memories',
+                style: AppTextStyles.titleMedium.copyWith(
+                  color: AppColors.textDarkPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              AppSpacing.v16,
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: connections.length,
+                  separatorBuilder: (_, __) => AppSpacing.v12,
+                  itemBuilder: (itemCtx, idx) {
+                    final conn = connections[idx];
+                    final cand = conn.connectedMemory;
+                    final config = MemoryTypeHelper.getConfig(cand.type);
+                    return ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(config.icon, color: config.color),
+                      title: Text(
+                        cand.title,
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textDarkPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        conn.reasons.map((r) => r.text).join(' • '),
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.textDarkTertiary,
+                        ),
+                      ),
+                      trailing: const Icon(Icons.chevron_right, color: AppColors.textDarkTertiary),
+                      onTap: () {
+                        Navigator.pop(sheetCtx);
+                        context.push('/memories/${cand.id}').then((_) => cubit.fetchMemories());
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMemoryCard(BuildContext context, Memory m, MemoryCubit cubit, List<Memory> allMemories) {
     final isReminder = m.reminderAt != null;
     final typeConfig = MemoryTypeHelper.getConfig(m.type);
 
@@ -1005,6 +1084,10 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
         accentColor = AppColors.brandSecondary;
       }
     }
+
+    // Synchronously check for strong connections
+    final connections = sl<MemoryGraphService>().getConnections(m, allMemories);
+    final strongConns = connections.where((c) => c.strength == ConnectionStrength.strong).toList();
 
     return MemoryGlassCard(
       padding: EdgeInsets.zero,
@@ -1120,6 +1203,33 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                   ],
                 ],
               ),
+              if (strongConns.isNotEmpty) ...[
+                AppSpacing.v12,
+                GestureDetector(
+                  onTap: () {
+                    HapticFeedback.lightImpact();
+                    _showConnectedMemoriesSheet(context, m, strongConns, cubit);
+                  },
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.hub_outlined,
+                        size: 12,
+                        color: AppColors.brandPrimary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Connected to ${strongConns.length} ${strongConns.length == 1 ? "memory" : "memories"}',
+                        style: AppTextStyles.labelSmall.copyWith(
+                          color: AppColors.brandPrimary,
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -1338,8 +1448,8 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
   }
 
   Widget _buildInsightsCard() {
-    return FutureBuilder<InsightsResult>(
-      future: sl<InsightService>().getInsights(),
+    return FutureBuilder<LifeInsights>(
+      future: sl<LifeInsightsService>().generateInsights(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const MemoryGlassCard(
@@ -1354,12 +1464,22 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
-          return const SizedBox.shrink();
+          return MemoryGlassCard(
+            padding: AppSpacing.pAll24,
+            child: Center(
+              child: Text(
+                'Failed to load insights.',
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color: AppColors.error,
+                ),
+              ),
+            ),
+          );
         }
 
-        final result = snapshot.data!;
+        final insights = snapshot.data!;
 
-        if (!result.hasEnoughData) {
+        if (insights.totalMemories < 3) {
           return MemoryGlassCard(
             padding: AppSpacing.pAll24,
             child: Column(
@@ -1372,7 +1492,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                 ),
                 AppSpacing.v12,
                 Text(
-                  'Keep capturing memories to unlock insights.',
+                  'Keep capturing memories to unlock personal insights.',
                   style: AppTextStyles.titleMedium.copyWith(
                     color: AppColors.textDarkPrimary,
                     fontWeight: FontWeight.bold,
@@ -1392,6 +1512,23 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
           );
         }
 
+        final prodSnapshot = sl<ProductivityEngine>().calculate(insights);
+        final cleanCat = insights.dominantCategory == 'None' || insights.dominantCategory.toLowerCase().trim() == 'other'
+            ? 'Daily Life'
+            : insights.dominantCategory;
+
+        String activeHourStr = 'None';
+        if (insights.busiestHour >= 0) {
+          final h = insights.busiestHour;
+          final period = h >= 12 ? 'PM' : 'AM';
+          final hour = h % 12 == 0 ? 12 : h % 12;
+          activeHourStr = '$hour $period';
+        }
+
+        final dailyInsight = sl<InsightTextGenerator>().generateDailySummary(insights, prodSnapshot);
+        final focusInsight = sl<InsightTextGenerator>().generateFocusInsight(insights);
+        final streakInsight = sl<InsightTextGenerator>().generateStreakInsight(insights);
+
         return MemoryGlassCard(
           padding: AppSpacing.pAll24,
           child: Column(
@@ -1406,7 +1543,7 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Memory Insights',
+                    'Life Insights',
                     style: AppTextStyles.titleMedium.copyWith(
                       color: AppColors.textDarkPrimary,
                       fontWeight: FontWeight.bold,
@@ -1415,56 +1552,249 @@ class _TimelinePageViewState extends State<_TimelinePageView> {
                 ],
               ),
               AppSpacing.v16,
-              ...result.insights.map((insight) {
-                final isLast = result.insights.last == insight;
-                return Padding(
-                  padding: EdgeInsets.only(bottom: isLast ? 0.0 : 16.0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.brandPrimary.withAlpha(20),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          insight.icon,
-                          size: 16,
-                          color: AppColors.brandPrimary,
-                        ),
+
+              // Memory Score Card
+              Container(
+                padding: AppSpacing.pAll16,
+                decoration: BoxDecoration(
+                  color: AppColors.bgDarkTertiary.withAlpha(30),
+                  borderRadius: AppRadius.brAll16,
+                  border: Border.all(color: AppColors.glassDarkBorder, width: 1.0),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'Memory Score: ',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.textDarkSecondary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                '${prodSnapshot.productivityScore.toStringAsFixed(0)} / 100',
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: AppColors.brandPrimary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          // Mood badge under score (EPIC 21 Task 7)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _getMoodColor(prodSnapshot.overallMood).withAlpha(20),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: _getMoodColor(prodSnapshot.overallMood).withAlpha(55), width: 1.0),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _getMoodIcon(prodSnapshot.overallMood),
+                                  size: 12,
+                                  color: _getMoodColor(prodSnapshot.overallMood),
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  prodSnapshot.overallMood,
+                                  style: AppTextStyles.labelSmall.copyWith(
+                                    color: _getMoodColor(prodSnapshot.overallMood),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          AppSpacing.v8,
+                          Text(
+                            'Based on consistency, reminders and memory growth.',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: AppColors.textDarkTertiary,
+                            ),
+                          ),
+                        ],
                       ),
-                      AppSpacing.h12,
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                    ),
+                    AppSpacing.h16,
+                    // Animated Progress Circle (EPIC 21 Task 7)
+                    TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 1200),
+                      curve: Curves.easeOutCubic,
+                      tween: Tween<double>(begin: 0.0, end: prodSnapshot.productivityScore / 100.0),
+                      builder: (context, animatedValue, child) {
+                        return Stack(
+                          alignment: Alignment.center,
                           children: [
+                            SizedBox(
+                              width: 54,
+                              height: 54,
+                              child: CircularProgressIndicator(
+                                value: animatedValue,
+                                strokeWidth: 5,
+                                backgroundColor: AppColors.bgDarkTertiary,
+                                color: AppColors.brandPrimary,
+                              ),
+                            ),
                             Text(
-                              insight.headline,
-                              style: AppTextStyles.titleSmall.copyWith(
+                              (animatedValue * 100).toStringAsFixed(0),
+                              style: AppTextStyles.titleMedium.copyWith(
                                 color: AppColors.textDarkPrimary,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            AppSpacing.v4,
-                            Text(
-                              insight.description,
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                color: AppColors.textDarkSecondary,
-                              ),
-                            ),
                           ],
-                        ),
-                      ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              AppSpacing.v16,
+
+              // Metrics Grid
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final itemWidth = (constraints.maxWidth - 12) / 2;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      _buildMetricTile('Mood', prodSnapshot.overallMood, _getMoodIcon(prodSnapshot.overallMood), _getMoodColor(prodSnapshot.overallMood), itemWidth),
+                      _buildMetricTile('Current Streak', '${insights.currentStreak} day${insights.currentStreak == 1 ? "" : "s"}', Icons.local_fire_department_outlined, Colors.redAccent, itemWidth),
+                      _buildMetricTile('Discipline', '${prodSnapshot.reminderDisciplineScore.toStringAsFixed(0)}%', Icons.check_circle_outline, Colors.greenAccent, itemWidth),
+                      _buildMetricTile('Top Focus', cleanCat, Icons.psychology_outlined, Colors.blueAccent, itemWidth),
+                      _buildMetricTile('Active Hour', activeHourStr, Icons.access_time_outlined, Colors.purpleAccent, itemWidth),
                     ],
-                  ),
-                );
-              }),
+                  );
+                },
+              ),
+              AppSpacing.v20,
+
+              // Generated Insights List
+              _buildInsightItem(dailyInsight.text, Icons.today_outlined),
+              AppSpacing.v12,
+              _buildInsightItem(focusInsight.text, Icons.psychology_outlined),
+              AppSpacing.v12,
+              _buildInsightItem(streakInsight.text, Icons.local_fire_department_outlined),
             ],
           ),
         );
       },
     );
+  }
+
+  Widget _buildMetricTile(String label, String value, IconData icon, Color color, double width) {
+    return Container(
+      width: width,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.bgDarkTertiary.withAlpha(35),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.glassDarkBorder, width: 1.0),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: AppColors.textDarkTertiary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textDarkPrimary,
+              fontWeight: FontWeight.bold,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInsightItem(String text, IconData icon) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: AppColors.brandPrimary.withAlpha(15),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            size: 14,
+            color: AppColors.brandPrimary,
+          ),
+        ),
+        AppSpacing.h12,
+        Expanded(
+          child: Text(
+            text,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textDarkSecondary,
+              height: 1.3,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _getMoodIcon(String mood) {
+    switch (mood) {
+      case 'Quiet':
+        return Icons.nightlight_round_outlined;
+      case 'Productive':
+        return Icons.flash_on_outlined;
+      case 'Focused':
+        return Icons.track_changes_outlined;
+      case 'Overloaded':
+        return Icons.warning_amber_outlined;
+      case 'Balanced':
+      default:
+        return Icons.scale_outlined;
+    }
+  }
+
+  Color _getMoodColor(String mood) {
+    switch (mood) {
+      case 'Quiet':
+        return Colors.blueAccent;
+      case 'Productive':
+        return Colors.amber;
+      case 'Focused':
+        return Colors.purpleAccent;
+      case 'Overloaded':
+        return Colors.redAccent;
+      case 'Balanced':
+      default:
+        return Colors.greenAccent;
+    }
   }
 
   Widget _buildFollowUpSliver(BuildContext context, MemoryCubit cubit) {

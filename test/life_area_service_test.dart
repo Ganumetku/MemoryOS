@@ -60,7 +60,7 @@ void main() {
     });
 
     test('Detects Other fallback area', () {
-      expect(parser.detectLifeArea('random notes that match nothing'), 'Other');
+      expect(parser.detectLifeArea('random notes that match nothing'), 'Daily Life');
     });
 
     test('Realistic QA test examples', () {

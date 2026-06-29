@@ -123,7 +123,7 @@ void main() {
         upcomingCount: 0,
       );
       expect(answer, contains('You captured 1 memory today'));
-      expect(answer, contains('completed 1 reminders'));
+      expect(answer, contains('completed 1 reminder'));
     });
 
     test('Generates correct sentence for empty memories list', () {

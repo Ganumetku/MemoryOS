@@ -8,6 +8,10 @@ import '../../domain/usecases/delete_memory_usecase.dart';
 import '../../domain/usecases/get_memories_usecase.dart';
 import '../../domain/usecases/save_memory_usecase.dart';
 import '../../domain/usecases/update_memory_usecase.dart';
+import '../../../../core/services/memory_graph_service.dart';
+import '../../../../core/services/memory_brain_service.dart';
+import '../../../../core/services/life_insights_service.dart';
+import '../../../../core/services/personal_coach_engine.dart';
 import 'memory_state.dart';
 
 /// Cubit managing all database CRUD operations for memories.
@@ -27,6 +31,20 @@ class MemoryCubit extends Cubit<MemoryState> {
   /// Fetches all saved memories from local database.
   Future<void> fetchMemories() async {
     emit(const MemoryLoading());
+
+    // Invalidate local memory connection graph and brain cache
+    try {
+      sl<MemoryGraphService>().clearCache();
+    } catch (_) {}
+    try {
+      sl<MemoryBrainService>().clearCache();
+    } catch (_) {}
+    try {
+      sl<LifeInsightsService>().invalidateCache();
+    } catch (_) {}
+    try {
+      sl<PersonalCoachEngine>().invalidateCache();
+    } catch (_) {}
 
     final result = await getMemoriesUseCase(NoParams());
 

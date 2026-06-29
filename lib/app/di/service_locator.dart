@@ -10,6 +10,7 @@ import '../../core/services/storage_service.dart';
 import '../../core/logger/logger_service.dart';
 import '../../core/network/network_info.dart';
 import '../../core/services/memory_connection_service.dart';
+import '../../core/services/memory_graph_service.dart';
 import '../../core/services/summary_service.dart';
 import '../../core/services/insight_service.dart';
 import '../../core/services/follow_up_service.dart';
@@ -19,6 +20,11 @@ import '../../core/services/life_area_service.dart';
 import '../../core/services/life_area_analytics_service.dart';
 import '../../core/parser/life_area_parser.dart';
 import '../../core/services/recall_engine_service.dart';
+import '../../core/services/life_insights_service.dart';
+import '../../core/services/productivity_engine.dart';
+import '../../core/services/insight_text_generator.dart';
+import '../../core/services/reflection_engine.dart';
+import '../../core/services/personal_coach_engine.dart';
 import '../../features/memories/data/datasources/memory_local_datasource.dart';
 import '../../features/memories/data/models/memory_model.dart';
 import '../../features/memories/data/models/follow_up_model.dart';
@@ -86,6 +92,11 @@ Future<void> initServiceLocator() async {
     () => MemoryConnectionService(sl()),
   );
 
+  // Memory Graph Service
+  sl.registerLazySingleton<MemoryGraphService>(
+    () => MemoryGraphService(sl()),
+  );
+
   // Insight Service
   sl.registerLazySingleton<InsightService>(
     () => InsightService(sl(), sl()),
@@ -145,6 +156,16 @@ Future<void> initServiceLocator() async {
 
   // Repository
   sl.registerLazySingleton<MemoryRepository>(() => MemoryRepositoryImpl(sl()));
+
+  // Life Insights Service
+  sl.registerLazySingleton<LifeInsightsService>(
+    () => LocalLifeInsightsService(sl()),
+  );
+
+  sl.registerLazySingleton<ProductivityEngine>(() => ProductivityEngine());
+  sl.registerLazySingleton<InsightTextGenerator>(() => InsightTextGenerator());
+  sl.registerLazySingleton<ReflectionEngine>(() => LocalReflectionEngine(sl()));
+  sl.registerLazySingleton<PersonalCoachEngine>(() => LocalPersonalCoachEngine(sl(), sl()));
 
   // Use Cases
   sl.registerLazySingleton(() => GetMemoriesUseCase(sl()));

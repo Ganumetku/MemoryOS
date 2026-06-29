@@ -336,7 +336,7 @@ class ReminderPage extends StatelessWidget {
                 }).toList();
 
                 return ListView(
-                  padding: AppSpacing.pAll16,
+                  padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 96),
                   children: [
                     if (remindersList.isEmpty)
                       Padding(

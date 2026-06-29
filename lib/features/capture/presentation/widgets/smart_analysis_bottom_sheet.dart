@@ -65,7 +65,7 @@ class _SmartAnalysisBottomSheetState extends State<SmartAnalysisBottomSheet> {
     final String typeFromParser = _parsed.type;
     _selectedType = _types.firstWhere(
       (t) => t.toLowerCase() == typeFromParser.toLowerCase().trim(),
-      orElse: () => 'Other',
+      orElse: () => 'Daily Life',
     );
     _selectedPriority = _parsed.priority;
     _reminderAt = _parsed.reminderAt;

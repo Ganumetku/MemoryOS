@@ -107,7 +107,7 @@ class LifeArea {
 
   static const LifeArea other = LifeArea(
     id: 'other',
-    name: 'Other',
+    name: 'Daily Life',
     emoji: '📌',
     icon: Icons.help_outline,
     color: AppColors.textDarkTertiary,

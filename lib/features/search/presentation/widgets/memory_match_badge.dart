@@ -14,6 +14,7 @@ class MemoryMatchBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final percentage = (relevanceScore * 100).round().clamp(15, 100);
+    if (percentage == 100) return const SizedBox.shrink();
 
     final String label;
     final Color color;

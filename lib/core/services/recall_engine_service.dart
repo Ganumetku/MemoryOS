@@ -57,7 +57,8 @@ class QueryNormalizer {
 
   static const Set<String> fillerWords = {
     'what', 'did', 'i', 'me', 'tell', 'about', 'show', 'find', 'my', 'the', 'is', 'at', 'on', 'in',
-    'a', 'an', 'and', 'or', 'to', 'with', 'for', 'of', 'it', 'that', 'this', 'from', 'by', 'you'
+    'a', 'an', 'and', 'or', 'to', 'with', 'for', 'of', 'it', 'that', 'this', 'from', 'by', 'you',
+    'please', 'remind', 'other'
   };
 
   /// Normalizes raw text: clean punctuation (p.m. -> pm), apply lowercase, aliases, and trim.
